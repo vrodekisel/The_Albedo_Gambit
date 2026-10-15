@@ -29,6 +29,7 @@ namespace AlbedoGambit.Prototype
         private int selected;
         private PrototypeNavigation navigation;
         private readonly NavMeshPath[] routes = new NavMeshPath[4];
+        private NavMeshPath leaderGroundRoute;
         private readonly Vector3[][] corners = new Vector3[4][];
         private readonly float[] nextRouteTime = new float[4];
         private readonly Vector3[] routeTargets = new Vector3[4];
@@ -45,8 +46,7 @@ namespace AlbedoGambit.Prototype
         private struct PathPoint { public Vector3 position; public float distance; }
         private sealed class JumpPoint
         {
-            public float distance, time;
-            public bool stationary;
+            public float time;
             public int consumedMask = 1;
         }
         public CapsuleMotor[] Members => members;
@@ -79,6 +79,7 @@ namespace AlbedoGambit.Prototype
                     Physics.IgnoreCollision(members[i].GetComponent<Collider>(), members[j].GetComponent<Collider>());
             }
             initialized = true;
+            leaderGroundRoute = new NavMeshPath();
             navigation = FindFirstObjectByType<PrototypeNavigation>();
             RebuildTrail();
         }
@@ -163,8 +164,7 @@ namespace AlbedoGambit.Prototype
             if (members[0].Tick(movement * moveSpeed, jump, dt))
             {
                 RecordLeader(true);
-                jumps.Add(new JumpPoint { distance = path[path.Count - 1].distance,
-                    time = elapsed, stationary = movement.sqrMagnitude < .01f });
+                jumps.Add(new JumpPoint { time = elapsed });
             }
             float total = path[path.Count - 1].distance;
             for (int i = 1; i < 4; i++)
@@ -209,6 +209,7 @@ namespace AlbedoGambit.Prototype
             Vector3 position = members[index].Body.position;
             if (navigation == null) navigation = FindFirstObjectByType<PrototypeNavigation>();
             if (navigation == null) return FlatDirection(target - position) * speed;
+            if (!navigation.TryProjectGround(target, out target)) return Vector3.zero;
             if (elapsed >= nextRouteTime[index] || FlatDistance(target, routeTargets[index]) > .6f)
             {
                 corners[index] = navigation.FindPath(position, target, routes[index]) ? routes[index].corners : null;
@@ -339,8 +340,28 @@ namespace AlbedoGambit.Prototype
         {
             var last = path[path.Count - 1];
             var position = members[0].Body.position;
+            if (navigation != null)
+            {
+                if (!navigation.TryProjectGround(position, out position)) return;
+                float travel = FlatDistance(last.position, position);
+                if (travel < .04f && !(force && travel > .001f)) return;
+                if (!navigation.FindPath(last.position, position, leaderGroundRoute)) return;
+                // If A jumps past a blocked footprint, store a walkable detour instead
+                // of a straight airborne segment through the obstacle. No actor is warped.
+                var points = leaderGroundRoute.corners;
+                for (int i = 1; i < points.Length; i++) AppendGroundPoint(points[i]);
+                return;
+            }
             float distance = FlatDistance(last.position, position);
             if (distance >= .04f || force && distance > .001f)
+                path.Add(new PathPoint { position = position, distance = last.distance + distance });
+        }
+
+        private void AppendGroundPoint(Vector3 position)
+        {
+            var last = path[path.Count - 1];
+            float distance = FlatDistance(last.position, position);
+            if (distance > .001f)
                 path.Add(new PathPoint { position = position, distance = last.distance + distance });
         }
 

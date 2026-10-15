@@ -10,6 +10,7 @@ namespace AlbedoGambit.Prototype
     {
         private NavMeshData data;
         private NavMeshDataInstance instance;
+        private float groundElevation;
         public bool IsReady => instance.valid;
 
         public bool EnsureReady()
@@ -17,6 +18,7 @@ namespace AlbedoGambit.Prototype
             if (instance.valid) return true;
             var sources = new List<NavMeshBuildSource>();
             var bounds = new Bounds(transform.position, Vector3.one);
+            groundElevation = float.PositiveInfinity;
             foreach (var box in FindObjectsByType<BoxCollider>(FindObjectsSortMode.None))
             {
                 if (!box.enabled || box.isTrigger || box.attachedRigidbody != null) continue;
@@ -24,6 +26,7 @@ namespace AlbedoGambit.Prototype
                     shape = NavMeshBuildSourceShape.Box, size = box.size,
                     transform = box.transform.localToWorldMatrix * Matrix4x4.Translate(box.center), area = 0 });
                 bounds.Encapsulate(box.bounds);
+                groundElevation = Mathf.Min(groundElevation, box.bounds.max.y);
             }
             if (sources.Count == 0) return false;
             var settings = NavMesh.GetSettingsByIndex(0);
@@ -42,11 +45,24 @@ namespace AlbedoGambit.Prototype
 
         public bool FindPath(Vector3 from, Vector3 to, NavMeshPath path)
         {
-            if (!EnsureReady()) return false;
-            if (!NavMesh.SamplePosition(from, out var start, 2, NavMesh.AllAreas) ||
-                !NavMesh.SamplePosition(to, out var end, .8f, NavMesh.AllAreas)) return false;
-            return NavMesh.CalculatePath(start.position, end.position, NavMesh.AllAreas, path)
+            if (!TryProjectGround(from, out var start, 2) ||
+                !TryProjectGround(to, out var end)) return false;
+            return NavMesh.CalculatePath(start, end, NavMesh.AllAreas, path)
                 && path.status == NavMeshPathStatus.PathComplete;
+        }
+
+        public bool TryProjectGround(Vector3 position, out Vector3 projected, float radius = .8f)
+        {
+            projected = default;
+            if (!EnsureReady()) return false;
+            // This prototype deliberately has one ground level plus the low board lip.
+            // Query at floor height, not jump height: nearby disconnected cube roofs must
+            // never become the walking destination of an airborne character.
+            position.y = groundElevation;
+            if (!NavMesh.SamplePosition(position, out var hit, radius, NavMesh.AllAreas) ||
+                hit.position.y > groundElevation + .4f) return false;
+            projected = hit.position;
+            return true;
         }
 
         public void Rebuild() { Release(); EnsureReady(); }
