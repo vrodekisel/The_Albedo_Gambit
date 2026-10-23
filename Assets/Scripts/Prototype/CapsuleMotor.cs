@@ -102,6 +102,9 @@ namespace AlbedoGambit.Prototype
 
         public void ResetTo(Vector3 position, Quaternion rotation)
         {
+            // A teleport must update the visible transform as well as the physics pose,
+            // including when the body becomes kinematic immediately afterwards.
+            transform.SetPositionAndRotation(position, rotation);
             Body.position = position;
             Body.rotation = rotation;
             Body.linearVelocity = Vector3.zero;

@@ -41,6 +41,15 @@ namespace AlbedoGambit.Prototype
         private Vector3 lastDirection = Vector3.right;
         private readonly Transform[] selectionRings = new Transform[4];
         private string statusMessage = "";
+        private readonly BattleSession battle = new BattleSession();
+        private BattleBoardView battleView;
+        private float timeScaleBeforePause = 1;
+        private bool ownsPause;
+        private readonly bool[] cutsceneKinematic = new bool[4];
+        public BattleSession Battle => battle;
+        public BattleHud Hud { get; set; }
+        // Reserved adapter reference; enemy integration is a separate step.
+        public BattlePrototypeController Combat { get; set; }
         public PartyMode Mode => mode;
         public int SelectedIndex => selected;
         private struct PathPoint { public Vector3 position; public float distance; }
@@ -88,6 +97,9 @@ namespace AlbedoGambit.Prototype
         {
             var keyboard = Keyboard.current;
             if (keyboard == null) { input = Vector2.zero; return; }
+            if (keyboard.escapeKey.wasPressedThisFrame) TogglePause();
+            if (battle.Phase == BattlePhase.Paused || battle.Phase == BattlePhase.Cutscene)
+            { input = Vector2.zero; jumpInput = resetInput = false; return; }
             input = new Vector2(
                 (keyboard.dKey.isPressed || keyboard.rightArrowKey.isPressed ? 1 : 0) -
                 (keyboard.aKey.isPressed || keyboard.leftArrowKey.isPressed ? 1 : 0),
@@ -130,6 +142,7 @@ namespace AlbedoGambit.Prototype
         {
             Initialize();
             if (!initialized) return;
+            if (battle.Phase == BattlePhase.Paused || battle.Phase == BattlePhase.Cutscene) return;
             elapsed += dt;
             foreach (var member in members)
                 if (member.Body.position.y < respawnBelowY) { ResetParty(); return; }
@@ -238,14 +251,17 @@ namespace AlbedoGambit.Prototype
 
         public void SelectMember(int index)
         {
+            if (battle.Phase == BattlePhase.Paused || battle.Phase == BattlePhase.Cutscene) return;
             if (index < 0 || index > 3 || mode == PartyMode.Regrouping) return;
             if (mode == PartyMode.Chained && index != 0) return;
+            if (mode == PartyMode.Chess && !battle.TrySelect(index)) return;
             selected = index; jumpInput = false; UpdateSelection();
         }
 
         public void ToggleGroup()
         {
             Initialize();
+            if (battle.Phase != BattlePhase.Exploration) return;
             if (mode == PartyMode.Chess) return;
             if (mode == PartyMode.Chained || mode == PartyMode.Regrouping)
             { mode = PartyMode.Separated; jumps.Clear(); ClearRoutes(); statusMessage = "Выбери персонажа клавишами 1–4"; }
@@ -256,6 +272,7 @@ namespace AlbedoGambit.Prototype
         public void BeginRegroup()
         {
             Initialize();
+            if (battle.Phase != BattlePhase.Exploration) return;
             if (mode == PartyMode.Chess) return;
             mode = PartyMode.Regrouping; selected = 0; jumps.Clear(); ClearRoutes();
             var anchor = members[0].Body.position;
@@ -289,32 +306,45 @@ namespace AlbedoGambit.Prototype
         public bool EnterChessMode(BoardGrid board)
         {
             Initialize();
-            if (board == null || mode == PartyMode.Chess) return false;
+            if (!initialized || board == null || mode == PartyMode.Chess) return false;
+            // C1-F1 remains an explicit debug fixture, not the future navigation-based placement solver.
+            if (!battle.TryBeginPlacement(board.ActiveMask, board.BlockedMask, new[] { 2, 3, 4, 5 }))
+            {
+                statusMessage = "Не удалось начать расстановку: проверь клетки C1–F1 и текущий режим.";
+                return false;
+            }
             explorationMode = mode == PartyMode.Regrouping ? PartyMode.Separated : mode;
             explorationSelection = selected;
             for (int i = 0; i < 4; i++)
             {
                 explorationPositions[i] = members[i].Body.position;
                 explorationRotations[i] = members[i].Body.rotation;
+                members[i].Body.isKinematic = false;
                 members[i].ResetTo(board.CellCenter(2 + i, 0) + Vector3.up * .015f, Quaternion.identity);
                 members[i].Body.isKinematic = true;
             }
             Physics.SyncTransforms();
             mode = PartyMode.Chess; selected = 0; jumps.Clear(); jumpInput = false;
-            statusMessage = "Тестовая расстановка C1–F1. Ходы и магия пока выключены.";
+            battle.CompletePlacement();
+            if (battleView == null) battleView = GetComponent<BattleBoardView>();
+            if (battleView == null) battleView = gameObject.AddComponent<BattleBoardView>();
+            battleView.Bind(this, board);
+            statusMessage = "ЛКМ по герою или занятой клетке — выбор. Перемещение и действия ещё не включены.";
             UpdateSelection();
             return true;
         }
 
         public void ExitChessMode()
         {
-            if (mode != PartyMode.Chess) return;
+            if (mode != PartyMode.Chess || battle.Phase != BattlePhase.Battle) return;
             for (int i = 0; i < 4; i++)
             {
                 members[i].Body.isKinematic = false;
                 members[i].ResetTo(explorationPositions[i], explorationRotations[i]);
             }
             mode = explorationMode; selected = explorationSelection;
+            battle.Reset();
+            if (battleView != null) battleView.Clear();
             Physics.SyncTransforms(); RebuildTrail(); ClearRoutes(); jumpInput = false; statusMessage = "";
         }
 
@@ -326,14 +356,21 @@ namespace AlbedoGambit.Prototype
 
         private void OnGUI()
         {
+            if (Hud != null && Hud.IsShowingBattle) return;
+            if (battle.Phase == BattlePhase.Paused)
+            {
+                GUI.Box(new Rect(Screen.width / 2f - 140, Screen.height / 2f - 40, 280, 80), "Пауза");
+                GUI.Label(new Rect(Screen.width / 2f - 115, Screen.height / 2f, 250, 30), "Esc — продолжить");
+                return;
+            }
             string label = mode == PartyMode.Chained ? "Цепочка" : mode == PartyMode.Separated ? "Отряд разделён" :
                 mode == PartyMode.Regrouping ? "Сбор к A" : "Шахматный режим (тест)";
             GUI.Box(new Rect(12, 12, 670, 98), "");
             var style = new GUIStyle(GUI.skin.label) { fontSize = 15, wordWrap = true };
             GUI.Label(new Rect(24, 18, 645, 88), $"{label}  |  Выбран: {(char)('A' + selected)}\n" +
                 "WASD / стрелки — идти   Пробел — прыжок   G — разделить / собрать\n" +
-                "1–4 — персонаж   T — тест шахматного режима   R — вернуть на старт\n" +
-                (mode == PartyMode.Regrouping || mode == PartyMode.Chess || mode == PartyMode.Separated ? statusMessage : ""), style);
+                "1–4 — персонаж   T — тест режима   R — на старт   Esc — пауза\n" +
+                statusMessage, style);
         }
 
         private void RecordLeader(bool force)
@@ -398,12 +435,67 @@ namespace AlbedoGambit.Prototype
         public void ResetParty()
         {
             if (!initialized) return;
+            RestoreTimeScale();
+            battle.Reset();
+            if (battleView != null) battleView.Clear();
             for (int i = 0; i < 4; i++)
             { members[i].Body.isKinematic = false; members[i].ResetTo(starts[i], rotations[i]); }
             mode = PartyMode.Chained; selected = 0; statusMessage = ""; ClearRoutes();
             Physics.SyncTransforms();
             RebuildTrail();
             jumpInput = false;
+        }
+
+        public void TogglePause()
+        {
+            if (battle.Phase == BattlePhase.Paused)
+            {
+                RestoreTimeScale();
+                battle.Resume();
+            }
+            else if (battle.Pause())
+            {
+                timeScaleBeforePause = Time.timeScale;
+                ownsPause = true;
+                Time.timeScale = 0;
+            }
+            input = Vector2.zero; jumpInput = resetInput = false;
+        }
+
+        // Story integration can freeze the party, then call EnterChessMode or CancelCutscene.
+        public bool BeginCutscene()
+        {
+            Initialize();
+            if (!initialized || !battle.BeginCutscene()) return false;
+            for (int i = 0; i < members.Length; i++)
+            {
+                cutsceneKinematic[i] = members[i].Body.isKinematic;
+                if (!cutsceneKinematic[i])
+                { members[i].Body.linearVelocity = Vector3.zero; members[i].Body.angularVelocity = Vector3.zero; }
+                members[i].Body.isKinematic = true;
+            }
+            input = Vector2.zero; jumpInput = resetInput = false;
+            return true;
+        }
+
+        public void CancelCutscene()
+        {
+            if (!battle.CancelCutscene()) return;
+            for (int i = 0; i < members.Length; i++) members[i].Body.isKinematic = cutsceneKinematic[i];
+            RebuildTrail(); ClearRoutes();
+        }
+
+        private void RestoreTimeScale()
+        {
+            if (!ownsPause) return;
+            Time.timeScale = timeScaleBeforePause;
+            ownsPause = false;
+        }
+
+        private void OnDisable()
+        {
+            RestoreTimeScale();
+            battle.Resume();
         }
     }
 }
