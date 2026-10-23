@@ -58,7 +58,7 @@ public static class JumpFollowRegression
         if (p.Mode != PartyMode.Chained) throw new Exception(label + ": chain mode changed");
         for (int i = 1; i < 4; i++)
         {
-            Vector3 delta = p.Members[i - 1].Body.position - p.Members[i].Body.position;
+            Vector3 delta = p.Members[PartyChainController.ActorAtSlot(i - 1)].Body.position - p.Members[PartyChainController.ActorAtSlot(i)].Body.position;
             if (delta.x < .7f || delta.x > 1.5f || Mathf.Abs(delta.z) > .25f || !p.Members[i].IsGrounded)
                 throw new Exception(label + ": follower " + i + " stuck/out of order, delta=" + delta);
         }

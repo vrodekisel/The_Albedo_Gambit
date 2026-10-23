@@ -61,6 +61,9 @@ namespace AlbedoGambit.Prototype
         public CapsuleMotor[] Members => members;
         public float Spacing => spacing;
         public float MoveSpeed => moveSpeed;
+        // Identity remains A/B/C/D; formation slots are A/C/B/D.
+        public static int FormationSlot(int actor) => actor == 1 ? 2 : actor == 2 ? 1 : actor;
+        public static int ActorAtSlot(int slot) => FormationSlot(slot);
         public int StoredPathPoints => path.Count;
 
         public void Configure(CapsuleMotor[] orderedMembers) { members = orderedMembers; }
@@ -182,7 +185,7 @@ namespace AlbedoGambit.Prototype
             float total = path[path.Count - 1].distance;
             for (int i = 1; i < 4; i++)
             {
-                float limit = Mathf.Max(path[0].distance, total - spacing * i);
+                float limit = Mathf.Max(path[0].distance, total - spacing * FormationSlot(i));
                 Vector3 position = members[i].Body.position;
                 // A short look-ahead follows corners without aiming directly at the leader.
                 for (int n = 0; n < 6; n++)
@@ -202,7 +205,7 @@ namespace AlbedoGambit.Prototype
                 foreach (var marker in jumps)
                 {
                     if ((marker.consumedMask & (1 << i)) != 0) continue;
-                    bool ready = elapsed >= marker.time + .18f * i;
+                    bool ready = elapsed >= marker.time + .18f * FormationSlot(i);
                     if (ready) { pending = marker; break; }
                 }
                 if (members[i].Tick(velocity, pending != null, dt) && pending != null)
@@ -284,7 +287,7 @@ namespace AlbedoGambit.Prototype
                 found = true;
                 for (int i = 1; i < 4; i++)
                 {
-                    var slot = anchor + direction * spacing * i;
+                    var slot = anchor + direction * spacing * FormationSlot(i);
                     if (navigation != null && navigation.EnsureReady())
                     {
                         if (!NavMesh.SamplePosition(slot, out var hit, .25f, NavMesh.AllAreas) ||
@@ -308,9 +311,12 @@ namespace AlbedoGambit.Prototype
             Initialize();
             if (!initialized || board == null || mode == PartyMode.Chess) return false;
             // C1-F1 remains an explicit debug fixture, not the future navigation-based placement solver.
-            if (!battle.TryBeginPlacement(board.ActiveMask, board.BlockedMask, new[] { 2, 3, 4, 5 }))
+            var enemies = GetComponent<BattleEnemySpawner>();
+            if (enemies != null && !enemies.IsConfigured) { statusMessage = "Не задан префаб противника."; return false; }
+            int[] starts = enemies != null ? new[] { 2, 4, 3, 5, 58, 59, 60, 61 } : new[] { 2, 4, 3, 5 };
+            if (!battle.TryBeginPlacement(board.ActiveMask, board.BlockedMask, starts))
             {
-                statusMessage = "Не удалось начать расстановку: проверь клетки C1–F1 и текущий режим.";
+                statusMessage = "Не удалось начать расстановку: проверь клетки C1–F1, C8–F8 и текущий режим.";
                 return false;
             }
             explorationMode = mode == PartyMode.Regrouping ? PartyMode.Separated : mode;
@@ -320,12 +326,13 @@ namespace AlbedoGambit.Prototype
                 explorationPositions[i] = members[i].Body.position;
                 explorationRotations[i] = members[i].Body.rotation;
                 members[i].Body.isKinematic = false;
-                members[i].ResetTo(board.CellCenter(2 + i, 0) + Vector3.up * .015f, Quaternion.identity);
+                members[i].ResetTo(board.CellCenter(2 + FormationSlot(i), 0) + Vector3.up * .015f, Quaternion.identity);
                 members[i].Body.isKinematic = true;
             }
             Physics.SyncTransforms();
             mode = PartyMode.Chess; selected = 0; jumps.Clear(); jumpInput = false;
             battle.CompletePlacement();
+            if (enemies != null) enemies.Show(battle, board);
             if (battleView == null) battleView = GetComponent<BattleBoardView>();
             if (battleView == null) battleView = gameObject.AddComponent<BattleBoardView>();
             battleView.Bind(this, board);
@@ -343,6 +350,7 @@ namespace AlbedoGambit.Prototype
                 members[i].ResetTo(explorationPositions[i], explorationRotations[i]);
             }
             mode = explorationMode; selected = explorationSelection;
+            GetComponent<BattleEnemySpawner>()?.Hide();
             battle.Reset();
             if (battleView != null) battleView.Clear();
             Physics.SyncTransforms(); RebuildTrail(); ClearRoutes(); jumpInput = false; statusMessage = "";
@@ -424,9 +432,10 @@ namespace AlbedoGambit.Prototype
         {
             path.Clear(); jumps.Clear(); elapsed = 0;
             float distance = 0;
-            for (int i = 3; i >= 0; i--)
+            for (int slot = 3; slot >= 0; slot--)
             {
-                if (i < 3) distance += FlatDistance(members[i + 1].Body.position, members[i].Body.position);
+                int i = ActorAtSlot(slot);
+                if (slot < 3) distance += FlatDistance(members[ActorAtSlot(slot + 1)].Body.position, members[i].Body.position);
                 path.Add(new PathPoint { position = members[i].Body.position, distance = distance });
                 progress[i] = distance;
             }
@@ -436,6 +445,7 @@ namespace AlbedoGambit.Prototype
         {
             if (!initialized) return;
             RestoreTimeScale();
+            GetComponent<BattleEnemySpawner>()?.Hide();
             battle.Reset();
             if (battleView != null) battleView.Clear();
             for (int i = 0; i < 4; i++)
@@ -444,6 +454,15 @@ namespace AlbedoGambit.Prototype
             Physics.SyncTransforms();
             RebuildTrail();
             jumpInput = false;
+        }
+
+        // Spawn-only milestone: the enemy side explicitly passes, without movement or attacks.
+        public bool EndPreviewTurn()
+        {
+            if (!battle.EndPlayerTurn()) return false;
+            if (GetComponent<BattleEnemySpawner>() != null && Combat == null && battle.Side == BattleSide.Enemy)
+                battle.CompleteEnemyTurn();
+            return true;
         }
 
         public void TogglePause()

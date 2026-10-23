@@ -68,8 +68,8 @@ namespace AlbedoGambit.Prototype
         private void EndTurn()
         {
             if (party == null) return;
-            bool ended = combat != null ? combat.EndTurn() : party.Battle.EndPlayerTurn();
-            if (ended) Notice(party.Battle.ParticipantCount == 4 ? "Next turn — enemies are not connected yet" : "Turn ended");
+            bool ended = combat != null ? combat.EndTurn() : party.EndPreviewTurn();
+            if (ended) Notice(combat == null ? "Next turn — enemy actions are not connected yet" : "Turn ended");
             Refresh();
         }
         private void Notice(string message) { notice = message; noticeUntil = Time.unscaledTime + 4; Refresh(); }

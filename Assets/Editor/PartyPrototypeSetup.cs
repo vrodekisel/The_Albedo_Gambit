@@ -69,7 +69,7 @@ public static class PartyPrototypeSetup
                 {
                     var member = new GameObject(ids[i] + " - " + (ChessRole)i);
                     member.transform.SetParent(root.transform, false);
-                    member.transform.localPosition = Vector3.left * (1.1f * i);
+                    member.transform.localPosition = Vector3.left * (1.1f * PartyChainController.FormationSlot(i));
                     var collider = member.AddComponent<CapsuleCollider>();
                     collider.center = new Vector3(0, .8f, 0);
                     collider.height = 1.6f; collider.radius = .3f;
@@ -147,10 +147,10 @@ public static class PartyPrototypeSetup
             Require(party.Members[0].Body.position.x > start.x + 7, "Leader moves at configured speed");
             for (int i = 1; i < 4; i++)
             {
-                float gap = party.Members[i - 1].Body.position.x - party.Members[i].Body.position.x;
+                float gap = party.Members[PartyChainController.ActorAtSlot(i - 1)].Body.position.x - party.Members[PartyChainController.ActorAtSlot(i)].Body.position.x;
                 Require(gap > .8f && gap < 1.4f, "Chain order/spacing for member " + i + ": " + gap);
             }
-            report.AppendLine("PASS: Straight movement, A-B-C-D order, spacing and stopping.");
+            report.AppendLine("PASS: Straight movement, A-C-B-D order, spacing and stopping.");
             party.ResetParty(); Simulate(party, Vector3.zero, 40);
             var counts = party.Members.Select(m => m.JumpCount).ToArray();
             party.Tick(Vector3.zero, true, .02f); Physics.Simulate(.02f);
@@ -158,7 +158,7 @@ public static class PartyPrototypeSetup
             for (int i = 0; i < 4; i++) Require(party.Members[i].JumpCount == counts[i] + 1,
                 "Stationary jump propagates once to member " + i);
             Require(party.Members.All(m => m.IsGrounded), "Party lands after stationary jump");
-            report.AppendLine("PASS: Space jump propagates once A-B-C-D while stationary; all land.");
+            report.AppendLine("PASS: Space jump propagates once A-C-B-D while stationary; all land.");
             party.ResetParty(); Simulate(party, Vector3.zero, 40);
             counts = party.Members.Select(m => m.JumpCount).ToArray();
             Simulate(party, Vector3.right, 15);
@@ -183,7 +183,7 @@ public static class PartyPrototypeSetup
             Simulate(party, Vector3.zero, 100);
             for (int i = 1; i < 4; i++)
             {
-                var offset = party.Members[i - 1].Body.position - party.Members[i].Body.position;
+                var offset = party.Members[PartyChainController.ActorAtSlot(i - 1)].Body.position - party.Members[PartyChainController.ActorAtSlot(i)].Body.position;
                 Require(offset.x > .8f && offset.x < 1.4f && Mathf.Abs(offset.z) < .18f,
                     "Followers complete a right-angle turn: " + offset);
             }

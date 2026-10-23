@@ -139,7 +139,7 @@ public static class PartySandboxSetup
             Sim(party, Vector3.right, 170);
             for (int i = 1; i < 4; i++)
             {
-                float gap = party.Members[i - 1].Body.position.x - party.Members[i].Body.position.x;
+                float gap = party.Members[PartyChainController.ActorAtSlot(i - 1)].Body.position.x - party.Members[PartyChainController.ActorAtSlot(i)].Body.position.x;
                 Require(gap > .7f && gap < 1.6f, "Catch-up during continuous movement member=" + i + " gap=" + gap);
             }
             report.AppendLine("PASS: Displaced D catches up while A keeps moving; chain spacing remains bounded.");
@@ -180,15 +180,15 @@ public static class PartySandboxSetup
                 Sim(party, Vector3.zero, 1);
                 for (int i = 1; i < 4; i++) if (first[i] < 0 && party.Members[i].JumpCount > counts[i]) first[i] = frame;
             }
-            Require(first[1] > 0 && first[2] > first[1] && first[3] > first[2], "Timed A B C D jump order");
-            report.AppendLine("PASS: Jumps propagate in temporal A-B-C-D order.");
+            Require(first[2] > 0 && first[1] > first[2] && first[3] > first[1], "Timed A C B D jump order");
+            report.AppendLine("PASS: Jumps propagate in temporal A-C-B-D order.");
             var positions = party.Members.Select(m => m.Body.position).ToArray();
             Require(party.EnterChessMode(board), "Enter chess mode");
             Sim(party, Vector3.right, 50);
             for (int i = 0; i < 4; i++)
             {
                 Require(party.Members[i].Body.isKinematic, "Chess body locked");
-                Require(Flat(party.Members[i].Body.position, board.CellCenter(2 + i, 0)) < .01f, "Chess placement and input lock");
+                Require(Flat(party.Members[i].Body.position, board.CellCenter(2 + PartyChainController.FormationSlot(i), 0)) < .01f, "Chess placement and input lock");
             }
             party.ExitChessMode();
             for (int i = 0; i < 4; i++) Require(!party.Members[i].Body.isKinematic && Flat(party.Members[i].Body.position, positions[i]) < .01f, "Restore exploration position");

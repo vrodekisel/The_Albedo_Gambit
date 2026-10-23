@@ -2583,19 +2583,40 @@ PrefabInstance:
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
-    m_AddedComponents: []
+    m_AddedComponents:
+    - targetCorrespondingSourceObject: {fileID: 3662245111050665986, guid: 169f2b2ac68ce564eb04f0dabd5098b2, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 2435909330525323784}
   m_SourcePrefab: {fileID: 100100000, guid: 169f2b2ac68ce564eb04f0dabd5098b2, type: 3}
 --- !u!114 &2435909330525323782 stripped
 MonoBehaviour:
   m_CorrespondingSourceObject: {fileID: 8897307124799053005, guid: 169f2b2ac68ce564eb04f0dabd5098b2, type: 3}
   m_PrefabInstance: {fileID: 2435909330525323781}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 0}
+  m_GameObject: {fileID: 2435909330525323783}
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: d2e381eaca714220a1cffbd2bb0d8fd0, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::AlbedoGambit.Prototype.PartyChainController
+--- !u!1 &2435909330525323783 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 3662245111050665986, guid: 169f2b2ac68ce564eb04f0dabd5098b2, type: 3}
+  m_PrefabInstance: {fileID: 2435909330525323781}
+  m_PrefabAsset: {fileID: 0}
+--- !u!114 &2435909330525323784
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2435909330525323783}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 1c9d5d22d0f50e84d970fe4d3761b1c1, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::AlbedoGambit.Prototype.BattleEnemySpawner
+  enemyPrefab: {fileID: 6880832412112769186, guid: f62b554c1da076e4fa23c4f2e590ad03, type: 3}
 --- !u!1001 &3467655633856116675
 PrefabInstance:
   m_ObjectHideFlags: 0
