@@ -164,8 +164,8 @@ namespace AlbedoGambit.Prototype
             return mask;
         }
         // Baseline geometry, deliberately not the research cache or lazy composite generator.
-        // Prototype attack rays stop at any participant. Movement rays pass living allies.
-        // KO bodies conservatively block rays until their traversal rule is specified.
+        // Straight movement and attack rays stop at every participant, including KO bodies.
+        // The knight jumps over intermediate cells but cannot land on an occupied cell.
         private bool Reachable(int member, int target, bool attack)
         {
             int origin = CellOf(member);
@@ -184,8 +184,7 @@ namespace AlbedoGambit.Prototype
             {
                 int cell = (origin / 8 + sy * i) * 8 + origin % 8 + sx * i;
                 if (IsBlocked(cell)) return false;
-                int occupant = OccupantAt(cell);
-                if (occupant >= 0 && (attack || !SameTeam(member, occupant) || IsKnockedOut(occupant))) return false;
+                if (OccupantAt(cell) >= 0) return false;
             }
             return true;
         }

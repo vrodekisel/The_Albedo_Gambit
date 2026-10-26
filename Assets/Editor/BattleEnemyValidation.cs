@@ -34,19 +34,24 @@ public static class BattleEnemyValidation
         Require(spawner != null && spawner.VisibleCount == 0, "No enemies in exploration");
         Require(Vector3.Distance(party.Members[0].transform.position, party.Members[2].transform.position) < Vector3.Distance(party.Members[0].transform.position, party.Members[1].transform.position), "Green starts second");
         var cells = new Transform[64]; for (int i = 0; i < 64; i++) cells[i] = board.CellTransform(i);
-        var missing = (Transform[])cells.Clone(); missing[58] = null; board.Configure(missing);
+        var missing = (Transform[])cells.Clone(); missing[16] = null; board.Configure(missing);
         Require(!party.EnterChessMode(board) && spawner.VisibleCount == 0 && party.Battle.ParticipantCount == 0, "Invalid enemy cell rejects entire encounter");
         board.Configure(cells);
         for (int cycle = 0; cycle < 3; cycle++)
         {
             Require(party.EnterChessMode(board), "Enter battle"); hud.Refresh();
             Require(spawner.VisibleCount == 4 && party.Battle.ParticipantCount == 8, "Exactly four registered opponents");
-            Require(party.Battle.CellOf(2) == 3 && party.Battle.CellOf(1) == 4, "Green second, red third on board");
+            Require(party.Battle.CellOf(2) == 31 && party.Battle.CellOf(1) == 39, "Green second, red third on board");
+            var center = Camera.main.WorldToViewportPoint((board.CellCenter(0, 0) + board.CellCenter(7, 7)) * .5f);
+            var heroes = Camera.main.WorldToViewportPoint((board.CellCenter(7, 2) + board.CellCenter(7, 5)) * .5f);
+            var foes = Camera.main.WorldToViewportPoint((board.CellCenter(0, 2) + board.CellCenter(0, 5)) * .5f);
+            Require(heroes.x > center.x && heroes.y < center.y && foes.x < center.x && foes.y > center.y,
+                "Camera layout: heroes lower-right, enemies upper-left");
             for (int i = 0; i < 4; i++)
             {
                 var enemy = spawner.EnemyAt(i);
-                Require(enemy.Participant == i + 4 && party.Battle.OccupantAt(58 + i) == i + 4, "View and occupancy agree");
-                Require(Vector3.Distance(enemy.transform.position, board.CellCenter(2 + i, 7) + Vector3.up * .015f) < .001f, "Enemy position");
+                Require(enemy.Participant == i + 4 && party.Battle.OccupantAt(16 + 8 * i) == i + 4, "View and occupancy agree");
+                Require(Vector3.Distance(enemy.transform.position, board.CellCenter(0, 2 + i) + Vector3.up * .015f) < .001f, "Enemy position");
                 Require(enemy.GetComponent<Rigidbody>().isKinematic && enemy.GetComponent<Collider>().enabled, "Stable enemy physics");
             }
             Require(!party.EnterChessMode(board), "Repeat entry does not duplicate");

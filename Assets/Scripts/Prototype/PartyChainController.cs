@@ -19,7 +19,8 @@ namespace AlbedoGambit.Prototype
         private readonly List<JumpPoint> jumps = new List<JumpPoint>();
         private Vector3[] starts;
         private Quaternion[] rotations;
-        private float[] progress;
+        private readonly PartyLocalNavigation localNavigation = new PartyLocalNavigation();
+        private readonly Vector3[] steering = new Vector3[4];
         private Vector2 input;
         private bool jumpInput;
         private bool resetInput;
@@ -86,7 +87,7 @@ namespace AlbedoGambit.Prototype
                 enabled = false;
                 return;
             }
-            starts = new Vector3[4]; rotations = new Quaternion[4]; progress = new float[4];
+            starts = new Vector3[4]; rotations = new Quaternion[4];
             for (int i = 0; i < 4; i++)
             {
                 if (members[i] == null) { enabled = false; return; }
@@ -95,7 +96,7 @@ namespace AlbedoGambit.Prototype
                 rotations[i] = members[i].Body.rotation;
                 selectionRings[i] = members[i].transform.Find("Selection Ring");
                 for (int j = 0; j < i; j++)
-                    Physics.IgnoreCollision(members[i].GetComponent<Collider>(), members[j].GetComponent<Collider>());
+                    Physics.IgnoreCollision(members[i].GetComponent<Collider>(), members[j].GetComponent<Collider>(), false);
             }
             initialized = true;
             leaderGroundRoute = new NavMeshPath();
@@ -182,7 +183,11 @@ namespace AlbedoGambit.Prototype
                 }
                 return;
             }
-            if (movement.sqrMagnitude > .01f) lastDirection = movement.normalized;
+            if (movement.sqrMagnitude > .01f)
+            {
+                if (Vector3.Dot(lastDirection, movement.normalized) < -.5f) TurnTrail(movement.normalized);
+                lastDirection = movement.normalized;
+            }
             RecordLeader(false);
             if (members[0].Tick(movement * moveSpeed, jump, dt))
             {
@@ -194,20 +199,14 @@ namespace AlbedoGambit.Prototype
             {
                 float limit = Mathf.Max(path[0].distance, total - spacing * FormationSlot(i));
                 Vector3 position = members[i].Body.position;
-                // A short look-ahead follows corners without aiming directly at the leader.
-                for (int n = 0; n < 6; n++)
-                {
-                    float next = Mathf.Min(limit, progress[i] + .12f);
-                    if (next <= progress[i] || FlatDistance(position, Sample(next)) > .16f) break;
-                    progress[i] = next;
-                }
-                float aimDistance = Mathf.Min(limit, progress[i] + .16f);
-                Vector3 delta = Sample(aimDistance) - position;
+                // Rejoin the current formation slot. Requiring every old breadcrumb
+                // deadlocks after a collision or when A reverses through the chain.
+                Vector3 target = Sample(limit);
+                target = YieldToLeader(i, target, movement);
+                Vector3 delta = target - position;
                 delta.y = 0;
-                // Slow only at the stopping point, not at each breadcrumb.
-                float remaining = Mathf.Max(0, limit - progress[i]);
-                float speed = Mathf.Min(moveSpeed * 1.3f, (remaining + delta.magnitude) * 9f);
-                Vector3 velocity = delta.magnitude < .035f ? Vector3.zero : Navigate(i, Sample(aimDistance), speed);
+                float speed = Mathf.Min(moveSpeed * 1.3f, delta.magnitude * 9f);
+                Vector3 velocity = delta.magnitude < .035f ? Vector3.zero : Navigate(i, target, speed);
                 JumpPoint pending = null;
                 foreach (var marker in jumps)
                 {
@@ -218,7 +217,7 @@ namespace AlbedoGambit.Prototype
                 if (members[i].Tick(velocity, pending != null, dt) && pending != null)
                     pending.consumedMask |= 1 << i;
             }
-            float earliest = Mathf.Min(progress[1], Mathf.Min(progress[2], progress[3]));
+            float earliest = total - spacing * 3;
             int remove = 0;
             while (remove + 1 < path.Count - 1 && path[remove + 1].distance < earliest - 2) remove++;
             if (remove > 0) path.RemoveRange(0, remove);
@@ -247,16 +246,65 @@ namespace AlbedoGambit.Prototype
             for (int c = 1; c < points.Length - 1; c++)
                 if (FlatDistance(position, points[c]) > .13f) { aim = points[c]; approachingCorner = true; break; }
             float distance = FlatDistance(position, aim);
-            // Trail targets intentionally sit a short distance ahead. Braking for every
-            // breadcrumb would make followers permanently slower than the leader.
-            return distance < .04f ? Vector3.zero : FlatDirection(aim - position) *
-                (approachingCorner ? Mathf.Min(speed, distance * 12) : speed);
+            // Static corners and moving party members are separate navigation concerns.
+            if (distance < .04f) return Vector3.zero;
+            steering[index] = localNavigation.Direction(index, position, aim, steering[index], members, navigation);
+            return steering[index] * (approachingCorner ? Mathf.Min(speed, distance * 12) : speed);
+        }
+
+        private Vector3 YieldToLeader(int index, Vector3 target, Vector3 movement)
+        {
+            if (movement.sqrMagnitude < .01f || navigation == null) return target;
+            var direction = movement.normalized;
+            var offset = members[index].Body.position - members[0].Body.position;
+            offset.y = 0;
+            float ahead = Vector3.Dot(offset, direction);
+            var side = Vector3.Cross(Vector3.up, direction);
+            float lateral = Vector3.Dot(offset, side);
+            if (ahead < -.15f || ahead > 1.6f || Mathf.Abs(lateral) > .95f) return target;
+            // Give the manually controlled leader a clear corridor on reversals.
+            for (int attempt = 0; attempt < 2; attempt++)
+            {
+                float sign = attempt == 0 ? 1 : -1;
+                var candidate = members[index].Body.position + side * (sign * 1.05f - lateral);
+                if (navigation.TryProjectGround(candidate, out var projected, .15f)) return projected;
+            }
+            return target;
+        }
+
+        private void TurnTrail(Vector3 heading)
+        {
+            // A reversal folds the old trail over itself. Seed distinct destinations
+            // behind the new heading, without changing any character's physical pose.
+            Vector3 anchor = members[0].Body.position;
+            if (navigation != null && !navigation.TryProjectGround(anchor, out anchor)) return;
+            var slots = new Vector3[4];
+            slots[0] = anchor;
+            for (int attempt = 0; attempt < 16; attempt++)
+            {
+                float angle = ((attempt + 1) / 2) * 22.5f * (attempt % 2 == 0 ? -1 : 1);
+                Vector3 behind = Quaternion.Euler(0, angle, 0) * -heading;
+                bool free = true;
+                for (int slot = 1; slot < 4; slot++)
+                {
+                    var point = anchor + behind * spacing * slot;
+                    if (navigation != null && (!navigation.TryProjectGround(point, out point, .2f)
+                        || NavMesh.Raycast(anchor, point, out _, NavMesh.AllAreas))) { free = false; break; }
+                    slots[slot] = point;
+                }
+                if (!free) continue;
+                path.Clear();
+                for (int slot = 3; slot >= 0; slot--)
+                    path.Add(new PathPoint { position = slots[slot], distance = (3 - slot) * spacing });
+                ClearRoutes();
+                return;
+            }
         }
 
         private static Vector3 FlatDirection(Vector3 delta) { delta.y = 0; return delta.normalized; }
         private void ClearRoutes()
         {
-            for (int i = 0; i < 4; i++) { corners[i] = null; nextRouteTime[i] = 0; }
+            for (int i = 0; i < 4; i++) { corners[i] = null; nextRouteTime[i] = 0; steering[i] = Vector3.zero; }
         }
 
         public void SelectMember(int index)
@@ -342,13 +390,13 @@ namespace AlbedoGambit.Prototype
         {
             Initialize();
             if (!initialized || board == null || mode == PartyMode.Chess) return false;
-            // C1-F1 remains an explicit debug fixture, not the future navigation-based placement solver.
+            // Opposite board edges are an explicit debug fixture, not the future placement solver.
             var enemies = GetComponent<BattleEnemySpawner>();
             if (enemies != null && !enemies.IsConfigured) { statusMessage = "Не задан префаб противника."; return false; }
-            int[] starts = enemies != null ? new[] { 2, 4, 3, 5, 58, 59, 60, 61 } : new[] { 2, 4, 3, 5 };
+            int[] starts = enemies != null ? new[] { 23, 39, 31, 47, 16, 24, 32, 40 } : new[] { 23, 39, 31, 47 };
             if (!battle.TryBeginPlacement(board.ActiveMask, board.BlockedMask, starts))
             {
-                statusMessage = "Не удалось начать расстановку: проверь клетки C1–F1, C8–F8 и текущий режим.";
+                statusMessage = "Не удалось начать расстановку: проверь клетки H3–H6, A3–A6 и текущий режим.";
                 return false;
             }
             explorationMode = mode == PartyMode.Regrouping ? PartyMode.Separated : mode;
@@ -359,7 +407,7 @@ namespace AlbedoGambit.Prototype
                 explorationPositions[i] = members[i].Body.position;
                 explorationRotations[i] = members[i].Body.rotation;
                 members[i].Body.isKinematic = false;
-                members[i].ResetTo(board.CellCenter(2 + FormationSlot(i), 0) + Vector3.up * .015f, Quaternion.identity);
+                members[i].ResetTo(board.CellCenter(7, 2 + FormationSlot(i)) + Vector3.up * .015f, Quaternion.identity);
                 members[i].Body.isKinematic = true;
             }
             Physics.SyncTransforms();
@@ -471,8 +519,9 @@ namespace AlbedoGambit.Prototype
                 int i = ActorAtSlot(slot);
                 if (slot < 3) distance += FlatDistance(members[ActorAtSlot(slot + 1)].Body.position, members[i].Body.position);
                 path.Add(new PathPoint { position = members[i].Body.position, distance = distance });
-                progress[i] = distance;
             }
+            Vector3 heading = FlatDirection(members[0].Body.position - members[ActorAtSlot(1)].Body.position);
+            if (heading.sqrMagnitude > .01f) lastDirection = heading;
         }
 
         public void ResetParty()

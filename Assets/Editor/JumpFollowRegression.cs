@@ -19,7 +19,22 @@ public static class JumpFollowRegression
         {
             foreach (var m in party.Members) m.Body.interpolation = RigidbodyInterpolation.None;
             Physics.SyncTransforms(); party.Initialize();
+            for (int i = 0; i < 4; i++)
+                for (int j = 0; j < i; j++)
+                    if (Physics.GetIgnoreCollision(party.Members[i].GetComponent<Collider>(), party.Members[j].GetComponent<Collider>()))
+                        throw new Exception("Party colliders must interact outside battle");
             Sim(party, Vector3.zero, 50);
+            party.ToggleGroup(); party.SelectMember(2);
+            for (int frame = 0; frame < 100; frame++)
+            {
+                Sim(party, Vector3.right, 1);
+                var a = party.Members[0].Body.position;
+                var c = party.Members[2].Body.position;
+                if (Vector3.Distance(a, c) < .55f)
+                    throw new Exception("Separated party members overlap while crossing");
+            }
+            party.ResetParty(); Sim(party, Vector3.zero, 50);
+            report.AppendLine("PASS: Party colliders interact; selected member cannot pass through another capsule.");
             Sim(party, Vector3.right, 8);
             party.Tick(Vector3.right, true, .02f); Physics.Simulate(.02f);
             Sim(party, Vector3.right, 90); Sim(party, Vector3.zero, 180);

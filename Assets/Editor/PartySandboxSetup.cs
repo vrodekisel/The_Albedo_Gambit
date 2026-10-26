@@ -123,6 +123,16 @@ public static class PartySandboxSetup
         var board = UnityEngine.Object.FindFirstObjectByType<BoardGrid>();
         var report = new System.Text.StringBuilder();
         var previous = Physics.simulationMode;
+        // Keep the navigation regression independent of optional sandbox decoration.
+        GameObject testObstacle = null;
+        if (GameObject.Find("Cube - Detour Test") == null)
+        {
+            testObstacle = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            testObstacle.name = "Temporary detour test cube";
+            testObstacle.transform.position = new Vector3(7, 1.1f, -2);
+            testObstacle.transform.localScale = new Vector3(2, 2.2f, 2);
+            Physics.SyncTransforms();
+        }
         Physics.simulationMode = SimulationMode.Script;
         try
         {
@@ -188,11 +198,11 @@ public static class PartySandboxSetup
             for (int i = 0; i < 4; i++)
             {
                 Require(party.Members[i].Body.isKinematic, "Chess body locked");
-                Require(Flat(party.Members[i].Body.position, board.CellCenter(2 + PartyChainController.FormationSlot(i), 0)) < .01f, "Chess placement and input lock");
+                Require(Flat(party.Members[i].Body.position, board.CellCenter(7, 2 + PartyChainController.FormationSlot(i))) < .01f, "Chess placement and input lock");
             }
             party.ExitChessMode();
             for (int i = 0; i < 4; i++) Require(!party.Members[i].Body.isKinematic && Flat(party.Members[i].Body.position, positions[i]) < .01f, "Restore exploration position");
-            report.AppendLine("PASS: T-style API places C1-F1, locks movement, restores prior positions on exit.");
+            report.AppendLine("PASS: T-style API places H3-H6, locks movement, restores prior positions on exit.");
             party.ToggleGroup(); party.SelectMember(3); party.EnterChessMode(board); party.ExitChessMode();
             Require(party.Mode == PartyMode.Separated && party.SelectedIndex == 3, "Restore separated mode and selection");
             report.AppendLine("PASS: Chess exit restores separated state and selected D.");
@@ -206,7 +216,11 @@ public static class PartySandboxSetup
             report.AppendLine("PASS: R reset restores dynamic grounded party from chess mode.");
             File.WriteAllText("Logs/PartySandboxValidation.txt", report.ToString());
         }
-        finally { Physics.simulationMode = previous; }
+        finally
+        {
+            Physics.simulationMode = previous;
+            if (testObstacle != null) UnityEngine.Object.DestroyImmediate(testObstacle);
+        }
     }
     private static float Flat(Vector3 a, Vector3 b) { a.y = b.y = 0; return Vector3.Distance(a, b); }
     private static void Sim(PartyChainController p, Vector3 move, int frames)

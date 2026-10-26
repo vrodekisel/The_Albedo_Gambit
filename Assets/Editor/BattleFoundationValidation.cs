@@ -42,8 +42,8 @@ public static class BattleFoundationValidation
             party.ToggleGroup(); party.SelectMember(2);
             var positions = party.Members.Select(m => m.Body.position).ToArray();
             var cells = Enumerable.Range(0, 64).Select(board.CellTransform).ToArray();
-            var missing = (Transform[])cells.Clone(); missing[2] = null; board.Configure(missing);
-            Require(!party.EnterChessMode(board), "Scene rejects missing C1");
+            var missing = (Transform[])cells.Clone(); missing[23] = null; board.Configure(missing);
+            Require(!party.EnterChessMode(board), "Scene rejects missing H3");
             for (int i = 0; i < 4; i++) Require(party.Members[i].Body.position == positions[i], "Failed placement does not teleport");
             board.Configure(cells);
             Require(party.EnterChessMode(board), "Scene enters battle");
@@ -51,13 +51,13 @@ public static class BattleFoundationValidation
                 Require(Vector3.Distance(party.Members[i].transform.position, party.Members[i].Body.position) < .001f,
                     "Rendered transform matches physics placement");
             var view = party.GetComponent<BattleBoardView>();
-            Require(view.SelectCell(5) && party.SelectedIndex == 3 && party.Battle.SelectedMember == 3, "Cell click selects D");
+            Require(view.SelectCell(47) && party.SelectedIndex == 3 && party.Battle.SelectedMember == 3, "Cell click selects D");
             Require(!view.SelectCell(12) && party.SelectedIndex == 3, "Empty click does not move or deselect");
             party.SelectMember(1);
             Require(party.Battle.SelectedMember == 1, "Keyboard selection synchronized");
             Time.timeScale = .75f;
             party.TogglePause(); party.SelectMember(0); party.ToggleGroup(); party.ExitChessMode();
-            Require(Time.timeScale == 0 && party.SelectedIndex == 1 && party.Mode == PartyMode.Chess && !view.SelectCell(5), "Pause locks all battle input");
+            Require(Time.timeScale == 0 && party.SelectedIndex == 1 && party.Mode == PartyMode.Chess && !view.SelectCell(47), "Pause locks all battle input");
             party.TogglePause();
             Require(Time.timeScale == .75f && party.Battle.Phase == BattlePhase.Battle, "Restores previous time scale");
             party.ExitChessMode();

@@ -60,7 +60,7 @@ namespace AlbedoGambit.Prototype
             initialized = true;
         }
 
-        public int[] DebugStarts => new[] { 2, 3, 4, 5, 58, 59, 60, 61 };
+        public int[] DebugStarts => new[] { 23, 39, 31, 47, 16, 24, 32, 40 };
         public bool BeginBattle()
         {
             Initialize();
