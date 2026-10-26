@@ -85,10 +85,14 @@ namespace AlbedoGambit.Prototype
 
         public bool TrySelect(int member)
         {
-            if (Phase != BattlePhase.Battle || member < 0 || member >= 4 || CellOf(member) < 0) return false;
+            if (!CanSelect(member)) return false;
             SelectedMember = member;
             return true;
         }
+
+        public bool CanSelect(int member) => Phase == BattlePhase.Battle && Side == BattleSide.Player &&
+            Result == BattleResult.Ongoing && member >= 0 && member < 4 && CellOf(member) >= 0 &&
+            (ActingMember < 0 || ActingMember == member);
 
         public bool BeginCutscene()
         {
@@ -136,7 +140,7 @@ namespace AlbedoGambit.Prototype
             for (int i = 0; i < memberCells.Length; i++) { memberCells[i] = -1; health[i] = 0; }
         }
 
-        // Inspection selection never changes the participant spending the current turn's actions.
+        // The first successful action locks both selection and action ownership until the next turn.
         public bool CanAct(int member) => Phase == BattlePhase.Battle && Result == BattleResult.Ongoing &&
             CellOf(member) >= 0 && !IsKnockedOut(member) &&
             (Side == BattleSide.Player ? member < 4 : member >= 4) &&
@@ -190,6 +194,7 @@ namespace AlbedoGambit.Prototype
         {
             if (!Contains(MoveTargets(member), target)) return false;
             ActingMember = member;
+            if (member < 4) SelectedMember = member;
             occupants[memberCells[member]] = -1; occupants[target] = member; memberCells[member] = target;
             MovementSpent = true; return true;
         }
@@ -197,6 +202,7 @@ namespace AlbedoGambit.Prototype
         {
             if (!Contains(AttackTargets(member), targetCell)) return false;
             ActingMember = member;
+            if (member < 4) SelectedMember = member;
             int target = OccupantAt(targetCell);
             health[target] = Math.Max(0, health[target] - AttackDamage);
             ActionSpent = true; UpdateResult(); return true;

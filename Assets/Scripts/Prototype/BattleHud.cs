@@ -98,15 +98,17 @@ namespace AlbedoGambit.Prototype
             healthFill.enabled = healthRatio > 0;
             manaLabel.text = "Ultimate Mana   — / 3";
             hint.text = "Abilities not implemented yet";
-            turnLabel.text = !string.IsNullOrEmpty(notice) && Time.unscaledTime < noticeUntil ? notice : "Turn " + state.PlayerTurn + "  ·  " + state.Side;
-            endTurnButton.interactable = state.Phase == BattlePhase.Battle && state.Side == BattleSide.Player && state.Result == BattleResult.Ongoing;
+            turnLabel.text = state.ActingMember >= 0 && state.Side == BattleSide.Player
+                ? "Turn " + state.PlayerTurn + "  ·  " + heroes[state.ActingMember].name + " — hero locked"
+                : !string.IsNullOrEmpty(notice) && Time.unscaledTime < noticeUntil ? notice : "Turn " + state.PlayerTurn + "  ·  click a highlighted cell";
+            endTurnButton.interactable = !party.IsBattleMoving && state.Phase == BattlePhase.Battle && state.Side == BattleSide.Player && state.Result == BattleResult.Ongoing;
             float x = 24;
             foreach (int actor in DisplayOrder)
             {
                 var rect = (RectTransform)heroButtons[actor].transform;
                 float size = actor == selected ? 197 : 127;
                 rect.anchoredPosition = new Vector2(x, -24); rect.sizeDelta = new Vector2(size, size);
-                heroButtons[actor].interactable = !paused;
+                heroButtons[actor].interactable = !party.IsBattleMoving && state.CanSelect(actor);
                 x += size + 30;
             }
             for (int i = 0; i < 3; i++)

@@ -43,6 +43,13 @@ namespace AlbedoGambit.Prototype
         private string statusMessage = "";
         private readonly BattleSession battle = new BattleSession();
         private BattleBoardView battleView;
+        private BoardGrid battleBoard;
+        private int movingMember = -1;
+        private Vector3 moveFrom, moveTo;
+        private float moveElapsed;
+        private const float BattleMoveDuration = .3f;
+        public bool IsBattleMoving => movingMember >= 0;
+        public ulong AvailableMoves => IsBattleMoving ? 0 : battle.MoveTargets(selected);
         private float timeScaleBeforePause = 1;
         private bool ownsPause;
         private readonly bool[] cutsceneKinematic = new bool[4];
@@ -152,7 +159,7 @@ namespace AlbedoGambit.Prototype
             movement.y = 0;
             movement = Vector3.ClampMagnitude(movement, 1);
             UpdateSelection();
-            if (mode == PartyMode.Chess) return;
+            if (mode == PartyMode.Chess) { TickBattleMovement(dt); return; }
             if (mode == PartyMode.Separated)
             {
                 for (int i = 0; i < 4; i++)
@@ -254,11 +261,36 @@ namespace AlbedoGambit.Prototype
 
         public void SelectMember(int index)
         {
+            if (IsBattleMoving) return;
             if (battle.Phase == BattlePhase.Paused || battle.Phase == BattlePhase.Cutscene) return;
             if (index < 0 || index > 3 || mode == PartyMode.Regrouping) return;
             if (mode == PartyMode.Chained && index != 0) return;
             if (mode == PartyMode.Chess && !battle.TrySelect(index)) return;
             selected = index; jumpInput = false; UpdateSelection();
+        }
+
+        public bool TryMoveSelected(int cell)
+        {
+            if (mode != PartyMode.Chess || battleBoard == null || IsBattleMoving) return false;
+            int actor = selected;
+            if (!battle.TryMove(actor, cell)) return false;
+            movingMember = actor; moveElapsed = 0;
+            moveFrom = members[actor].Body.position;
+            moveTo = battleBoard.CellCenter(cell % 8, cell / 8) + Vector3.up * .015f;
+            return true;
+        }
+
+        private void TickBattleMovement(float dt)
+        {
+            if (!IsBattleMoving) return;
+            moveElapsed += Mathf.Max(0, dt);
+            float t = Mathf.Clamp01(moveElapsed / BattleMoveDuration);
+            Vector3 position = Vector3.Lerp(moveFrom, moveTo, Mathf.SmoothStep(0, 1, t));
+            if (battle.RoleOf(movingMember) == ChessRole.Knight) position += Vector3.up * Mathf.Sin(t * Mathf.PI) * 1.8f;
+            var motor = members[movingMember];
+            motor.transform.position = position; motor.Body.position = position;
+            if (t >= 1) movingMember = -1;
+            Physics.SyncTransforms();
         }
 
         public void ToggleGroup()
@@ -320,6 +352,7 @@ namespace AlbedoGambit.Prototype
                 return false;
             }
             explorationMode = mode == PartyMode.Regrouping ? PartyMode.Separated : mode;
+            battleBoard = board; movingMember = -1;
             explorationSelection = selected;
             for (int i = 0; i < 4; i++)
             {
@@ -336,7 +369,7 @@ namespace AlbedoGambit.Prototype
             if (battleView == null) battleView = GetComponent<BattleBoardView>();
             if (battleView == null) battleView = gameObject.AddComponent<BattleBoardView>();
             battleView.Bind(this, board);
-            statusMessage = "ЛКМ по герою или занятой клетке — выбор. Перемещение и действия ещё не включены.";
+            statusMessage = "ЛКМ по герою — выбор; по подсвеченной клетке — ход. End Turn — следующий ход.";
             UpdateSelection();
             return true;
         }
@@ -344,6 +377,7 @@ namespace AlbedoGambit.Prototype
         public void ExitChessMode()
         {
             if (mode != PartyMode.Chess || battle.Phase != BattlePhase.Battle) return;
+            movingMember = -1; battleBoard = null;
             for (int i = 0; i < 4; i++)
             {
                 members[i].Body.isKinematic = false;
@@ -444,6 +478,7 @@ namespace AlbedoGambit.Prototype
         public void ResetParty()
         {
             if (!initialized) return;
+            movingMember = -1; battleBoard = null;
             RestoreTimeScale();
             GetComponent<BattleEnemySpawner>()?.Hide();
             battle.Reset();
@@ -459,6 +494,7 @@ namespace AlbedoGambit.Prototype
         // Spawn-only milestone: the enemy side explicitly passes, without movement or attacks.
         public bool EndPreviewTurn()
         {
+            if (IsBattleMoving) return false;
             if (!battle.EndPlayerTurn()) return false;
             if (GetComponent<BattleEnemySpawner>() != null && Combat == null && battle.Side == BattleSide.Enemy)
                 battle.CompleteEnemyTurn();
