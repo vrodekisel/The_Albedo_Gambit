@@ -8,6 +8,8 @@ namespace AlbedoGambit.Prototype
     // Rebuild after changing static level geometry at runtime.
     public sealed class PrototypeNavigation : MonoBehaviour
     {
+        [SerializeField] private MeshCollider groundSurface;
+        public void ConfigureGround(MeshCollider ground) { groundSurface = ground; }
         private NavMeshData data;
         private NavMeshDataInstance instance;
         private float groundElevation;
@@ -19,6 +21,13 @@ namespace AlbedoGambit.Prototype
             var sources = new List<NavMeshBuildSource>();
             var bounds = new Bounds(transform.position, Vector3.one);
             groundElevation = float.PositiveInfinity;
+            if (groundSurface && groundSurface.sharedMesh)
+            {
+                sources.Add(new NavMeshBuildSource { shape = NavMeshBuildSourceShape.Mesh,
+                    sourceObject = groundSurface.sharedMesh, transform = groundSurface.transform.localToWorldMatrix, area = 0 });
+                bounds.Encapsulate(groundSurface.bounds);
+                groundElevation = groundSurface.bounds.min.y;
+            }
             foreach (var box in FindObjectsByType<BoxCollider>(FindObjectsSortMode.None))
             {
                 if (!box.enabled || box.isTrigger || box.attachedRigidbody != null) continue;
@@ -26,7 +35,7 @@ namespace AlbedoGambit.Prototype
                     shape = NavMeshBuildSourceShape.Box, size = box.size,
                     transform = box.transform.localToWorldMatrix * Matrix4x4.Translate(box.center), area = 0 });
                 bounds.Encapsulate(box.bounds);
-                groundElevation = Mathf.Min(groundElevation, box.bounds.max.y);
+                if (!groundSurface) groundElevation = Mathf.Min(groundElevation, box.bounds.max.y);
             }
             if (sources.Count == 0) return false;
             var settings = NavMesh.GetSettingsByIndex(0);
