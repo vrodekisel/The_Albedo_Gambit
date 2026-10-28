@@ -93,13 +93,14 @@ namespace AlbedoGambit.Prototype
         {
             if (party == null || party.IsBattleMoving || party.Battle.Phase != BattlePhase.Battle || !party.Battle.HasCell(cell)) return false;
             int occupant = party.Battle.OccupantAt(cell);
+            if (party.IsAimingAbility) return party.TryUseAbilityOn(cell);
             return occupant >= 0 ? SelectCell(cell) : party.TryMoveSelected(cell);
         }
 
         public void RefreshHighlights()
         {
             if (party == null || board == null || party.Battle.Phase != BattlePhase.Battle) { Clear(); return; }
-            HighlightedMoves = party.AvailableMoves;
+            HighlightedMoves = party.IsAimingAbility ? party.AvailableAttackTargets : party.AvailableMoves;
             DrawCell(selectedOutline, party.Battle.CellOf(party.SelectedIndex));
             for (int i = 0; i < 64; i++) DrawCell(moveOutlines[i], (HighlightedMoves & (1UL << i)) != 0 ? i : -1);
         }

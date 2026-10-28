@@ -48,9 +48,15 @@ namespace AlbedoGambit.Prototype
         private int movingMember = -1;
         private Vector3 moveFrom, moveTo;
         private float moveElapsed;
+        private BattleAbilityController abilityController;
         private const float BattleMoveDuration = .3f;
-        public bool IsBattleMoving => movingMember >= 0;
+        public bool IsBattleMoving => movingMember >= 0 || abilityController != null && abilityController.IsProjectileFlying;
         public ulong AvailableMoves => IsBattleMoving ? 0 : battle.MoveTargets(selected);
+        public ulong AvailableAttackTargets => abilityController != null && abilityController.IsAiming && !IsBattleMoving
+            ? battle.AttackTargets(selected) : 0;
+        public bool IsAimingAbility => abilityController != null && abilityController.IsAiming;
+        public bool BeginAbility(int slot) => abilityController != null && abilityController.BeginAim(slot);
+        public bool TryUseAbilityOn(int cell) => abilityController != null && abilityController.TryFire(cell);
         private float timeScaleBeforePause = 1;
         private bool ownsPause;
         private readonly bool[] cutsceneKinematic = new bool[4];
@@ -166,6 +172,7 @@ namespace AlbedoGambit.Prototype
             if (mode == PartyMode.Chess)
             {
                 TickBattleMovement(dt);
+                if (abilityController != null) abilityController.TickAbility(dt);
                 GetComponent<BattleEnemySpawner>()?.TickMovement(battle, battleBoard, dt);
                 selected = battle.SelectedMember;
                 UpdateSelection();
@@ -340,7 +347,7 @@ namespace AlbedoGambit.Prototype
 
         private void TickBattleMovement(float dt)
         {
-            if (!IsBattleMoving) return;
+            if (movingMember < 0) return;
             moveElapsed += Mathf.Max(0, dt);
             float t = Mathf.Clamp01(moveElapsed / BattleMoveDuration);
             Vector3 position = Vector3.Lerp(moveFrom, moveTo, Mathf.SmoothStep(0, 1, t));
@@ -403,6 +410,8 @@ namespace AlbedoGambit.Prototype
             // Opposite board edges are an explicit debug fixture, not the future placement solver.
             var enemies = GetComponent<BattleEnemySpawner>();
             if (enemies != null && !enemies.IsConfigured) { statusMessage = "Не задан префаб противника."; return false; }
+            battle.ConfigurePrototype(enemies != null && enemies.MovementEnabled ? 100 : 3,
+                enemies != null && enemies.MovementEnabled ? 30 : 1);
             int[] starts = enemies != null && enemies.MovementEnabled ? new[] { 23, 31, 39, 47, 16, 24, 32, 40 }
                 : enemies != null ? new[] { 23, 39, 31, 47, 16, 24, 32, 40 } : new[] { 23, 39, 31, 47 };
             if (!battle.TryBeginPlacement(board.ActiveMask, board.BlockedMask, starts, enemies != null && enemies.MovementEnabled))
@@ -426,6 +435,12 @@ namespace AlbedoGambit.Prototype
             mode = PartyMode.Chess; selected = 0; jumps.Clear(); jumpInput = false;
             battle.CompletePlacement();
             if (enemies != null) enemies.Show(battle, board);
+            if (enemies != null && enemies.MovementEnabled)
+            {
+                if (abilityController == null) abilityController = GetComponent<BattleAbilityController>()
+                    ?? gameObject.AddComponent<BattleAbilityController>();
+                abilityController.Bind(this, board);
+            }
             if (battleView == null) battleView = GetComponent<BattleBoardView>();
             if (battleView == null) battleView = gameObject.AddComponent<BattleBoardView>();
             battleView.Bind(this, board);
@@ -440,6 +455,7 @@ namespace AlbedoGambit.Prototype
         {
             if (mode != PartyMode.Chess || battle.Phase != BattlePhase.Battle) return;
             movingMember = -1;
+            if (abilityController != null) abilityController.Cancel();
             if (battleBoard != null) battleBoard.SetBattleVisible(false);
             battleBoard = null;
             for (int i = 0; i < 4; i++)
@@ -544,6 +560,7 @@ namespace AlbedoGambit.Prototype
         {
             if (!initialized) return;
             movingMember = -1;
+            if (abilityController != null) abilityController.Cancel();
             if (battleBoard != null) battleBoard.SetBattleVisible(false);
             battleBoard = null;
             RestoreTimeScale();
@@ -563,6 +580,7 @@ namespace AlbedoGambit.Prototype
         {
             if (IsBattleMoving) return false;
             if (!battle.EndPlayerTurn()) return false;
+            if (abilityController != null) abilityController.Cancel();
             var enemies = GetComponent<BattleEnemySpawner>();
             if (enemies != null && !enemies.MovementEnabled && Combat == null && battle.Side == BattleSide.Enemy)
                 battle.CompleteEnemyTurn();

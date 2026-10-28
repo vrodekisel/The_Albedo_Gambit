@@ -13,6 +13,7 @@ namespace AlbedoGambit.Prototype
         private readonly int[] occupants = new int[64];
         private readonly int[] memberCells = new int[8];
         private readonly int[] health = new int[8];
+        private readonly int[] ultimateCharge = new int[8];
         private int nextEnemy;
         private int nextPlayerSlot;
         public bool OrderedEnemyMovement { get; private set; }
@@ -38,6 +39,7 @@ namespace AlbedoGambit.Prototype
         public int OccupantAt(int cell) => HasCell(cell) ? occupants[cell] : -1;
         public int CellOf(int member) => member >= 0 && member < ParticipantCount ? memberCells[member] : -1;
         public int HealthOf(int member) => member >= 0 && member < ParticipantCount ? health[member] : 0;
+        public int UltimateChargeOf(int member) => member >= 0 && member < ParticipantCount ? ultimateCharge[member] : 0;
         public bool IsKnockedOut(int member) => CellOf(member) >= 0 && health[member] == 0;
         public ChessRole RoleOf(int member)
         {
@@ -55,7 +57,8 @@ namespace AlbedoGambit.Prototype
         public bool SameTeam(int a, int b) => (a < 4) == (b < 4);
         public void ConfigurePrototype(int maxHealth, int damage)
         {
-            if (Phase != BattlePhase.Exploration) throw new InvalidOperationException("Configure outside an encounter.");
+            if (Phase != BattlePhase.Exploration && Phase != BattlePhase.Cutscene)
+                throw new InvalidOperationException("Configure outside an encounter.");
             MaxHealth = Math.Max(1, maxHealth); AttackDamage = Math.Max(1, damage);
         }
 
@@ -84,6 +87,7 @@ namespace AlbedoGambit.Prototype
                 memberCells[i] = starts[i];
                 occupants[starts[i]] = i;
                 health[i] = MaxHealth;
+                ultimateCharge[i] = 0;
             }
             SelectedMember = 0;
             ActingMember = -1; Side = BattleSide.Player; Result = BattleResult.Ongoing;
@@ -160,7 +164,7 @@ namespace AlbedoGambit.Prototype
         private void ClearOccupancy()
         {
             for (int i = 0; i < occupants.Length; i++) occupants[i] = -1;
-            for (int i = 0; i < memberCells.Length; i++) { memberCells[i] = -1; health[i] = 0; }
+            for (int i = 0; i < memberCells.Length; i++) { memberCells[i] = -1; health[i] = 0; ultimateCharge[i] = 0; }
         }
 
         // The first successful action locks both selection and action ownership until the next turn.
@@ -228,7 +232,11 @@ namespace AlbedoGambit.Prototype
             if (member < 4) SelectedMember = member;
             int target = OccupantAt(targetCell);
             health[target] = Math.Max(0, health[target] - AttackDamage);
-            ActionSpent = true; UpdateResult(); return true;
+            if (member < 4) ultimateCharge[member] = Math.Min(3, ultimateCharge[member] + 1);
+            ActionSpent = true;
+            // Encounter completion and knockout presentation belong to a later block.
+            if (!OrderedEnemyMovement) UpdateResult();
+            return true;
         }
         private void UpdateResult()
         {

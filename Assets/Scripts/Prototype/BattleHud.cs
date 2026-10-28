@@ -64,8 +64,16 @@ namespace AlbedoGambit.Prototype
         private void PreviewAbility(int slot)
         {
             if (party == null || party.Battle.Phase != BattlePhase.Battle) return;
+            if (slot < 2 && party.Battle.OrderedEnemyMovement)
+            {
+                if (party.BeginAbility(slot)) Notice("Choose a highlighted enemy");
+                return;
+            }
             Notice(heroes[party.SelectedIndex].abilities[slot] + " — not implemented yet");
         }
+        public void ShowAbilityHit(int enemy, int health, int charge)
+        { Notice("Enemy " + (enemy - 3) + ": " + health + " / 100 HP  ·  Ultimate " + charge + " / 3"); }
+        public void ShowAbilityFlight() { Notice("Ability in flight"); }
         private void EndTurn()
         {
             if (party == null) return;
@@ -97,10 +105,17 @@ namespace AlbedoGambit.Prototype
             float healthRatio = state.HealthOf(selected) / (float)state.MaxHealth;
             healthFill.rectTransform.SetSizeWithCurrentAnchors(RectTransform.Axis.Horizontal, 382 * healthRatio);
             healthFill.enabled = healthRatio > 0;
-            manaLabel.text = "Ultimate Mana   — / 3";
-            hint.text = "Abilities not implemented yet";
+            manaLabel.text = state.OrderedEnemyMovement
+                ? "Ultimate Mana   " + state.UltimateChargeOf(selected) + " / 3"
+                : "Ultimate Mana   — / 3";
+            hint.text = state.OrderedEnemyMovement
+                ? party.IsBattleMoving ? "Action in progress"
+                : party.IsAimingAbility ? "Click a highlighted enemy" : "Choose an ability or a move"
+                : "Abilities not implemented yet";
             turnLabel.text = state.Side == BattleSide.Enemy
                 ? "Enemy turn  ·  " + state.RoleOf(state.ActingMember)
+                : state.OrderedEnemyMovement && !string.IsNullOrEmpty(notice) && Time.unscaledTime < noticeUntil
+                ? notice
                 : state.OrderedEnemyMovement
                 ? "Turn " + state.PlayerTurn + "  ·  " + heroes[state.SelectedMember].name + " — your turn"
                 : state.ActingMember >= 0 && state.Side == BattleSide.Player
@@ -119,9 +134,10 @@ namespace AlbedoGambit.Prototype
             for (int i = 0; i < 3; i++)
             {
                 abilityIcons[i].sprite = art.icons[i];
-                abilityLabels[i].text = art.abilities[i];
+                abilityLabels[i].text = state.OrderedEnemyMovement && i < 2 ? "Orb " + (i + 1) : art.abilities[i];
                 abilityBackgrounds[i].color = art.color;
-                abilityButtons[i].interactable = !paused && state.Phase == BattlePhase.Battle && state.Side == BattleSide.Player;
+                abilityButtons[i].interactable = !party.IsBattleMoving && !paused && state.Phase == BattlePhase.Battle &&
+                    state.Side == BattleSide.Player && (!state.OrderedEnemyMovement && i == 2 || i < 2 && !state.ActionSpent);
             }
         }
         public bool PointerOverUI(Vector2 position)
