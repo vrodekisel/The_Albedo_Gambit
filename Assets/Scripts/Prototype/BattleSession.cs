@@ -14,6 +14,8 @@ namespace AlbedoGambit.Prototype
         private readonly int[] memberCells = new int[8];
         private readonly int[] health = new int[8];
         private int nextEnemy;
+        private int nextPlayerSlot;
+        public bool OrderedEnemyMovement { get; private set; }
         private BattlePhase resumePhase;
         private ulong activeCells;
         private ulong blockedCells;
@@ -37,7 +39,19 @@ namespace AlbedoGambit.Prototype
         public int CellOf(int member) => member >= 0 && member < ParticipantCount ? memberCells[member] : -1;
         public int HealthOf(int member) => member >= 0 && member < ParticipantCount ? health[member] : 0;
         public bool IsKnockedOut(int member) => CellOf(member) >= 0 && health[member] == 0;
-        public ChessRole RoleOf(int member) => member >= 0 && member < 4 ? (ChessRole)member : ChessRole.King;
+        public ChessRole RoleOf(int member)
+        {
+            if (member >= 0 && member < 4) return (ChessRole)member;
+            if (!OrderedEnemyMovement) return ChessRole.King;
+            // Reverse of the player's board formation: A, C, B, D -> D, B, C, A.
+            switch (member)
+            {
+                case 4: return ChessRole.Knight;
+                case 5: return ChessRole.Rook;
+                case 6: return ChessRole.Bishop;
+                default: return ChessRole.King;
+            }
+        }
         public bool SameTeam(int a, int b) => (a < 4) == (b < 4);
         public void ConfigurePrototype(int maxHealth, int damage)
         {
@@ -46,7 +60,7 @@ namespace AlbedoGambit.Prototype
         }
 
         // Validate the whole placement before changing any state. No half-placed party on failure.
-        public bool TryBeginPlacement(ulong active, ulong blocked, int[] starts)
+        public bool TryBeginPlacement(ulong active, ulong blocked, int[] starts, bool orderedEnemyMovement = false)
         {
             if (Phase != BattlePhase.Exploration && Phase != BattlePhase.Cutscene) return false;
             if (starts == null || (starts.Length != 4 && starts.Length != 8)) return false;
@@ -60,6 +74,8 @@ namespace AlbedoGambit.Prototype
                 used |= bit;
             }
             ClearOccupancy();
+            OrderedEnemyMovement = orderedEnemyMovement && starts.Length == 8;
+            nextPlayerSlot = 0;
             ParticipantCount = starts.Length;
             activeCells = active;
             blockedCells = blocked;
@@ -80,6 +96,11 @@ namespace AlbedoGambit.Prototype
         {
             if (Phase != BattlePhase.Placement) return false;
             Phase = BattlePhase.Battle;
+            if (OrderedEnemyMovement)
+            {
+                PlayerTurn = 0;
+                BeginEnemyTurn();
+            }
             return true;
         }
 
@@ -92,6 +113,7 @@ namespace AlbedoGambit.Prototype
 
         public bool CanSelect(int member) => Phase == BattlePhase.Battle && Side == BattleSide.Player &&
             Result == BattleResult.Ongoing && member >= 0 && member < 4 && CellOf(member) >= 0 &&
+            (!OrderedEnemyMovement || member == SelectedMember) &&
             (ActingMember < 0 || ActingMember == member);
 
         public bool BeginCutscene()
@@ -130,6 +152,7 @@ namespace AlbedoGambit.Prototype
             ActingMember = -1; ParticipantCount = PlayerTurn = 0;
             Side = BattleSide.Player; Result = BattleResult.Ongoing;
             MovementSpent = ActionSpent = false;
+            OrderedEnemyMovement = false; nextPlayerSlot = 0;
             activeCells = blockedCells = 0;
             ClearOccupancy();
         }
@@ -144,6 +167,7 @@ namespace AlbedoGambit.Prototype
         public bool CanAct(int member) => Phase == BattlePhase.Battle && Result == BattleResult.Ongoing &&
             CellOf(member) >= 0 && !IsKnockedOut(member) &&
             (Side == BattleSide.Player ? member < 4 : member >= 4) &&
+            (!OrderedEnemyMovement || Side != BattleSide.Player || member == SelectedMember) &&
             (ActingMember < 0 || ActingMember == member);
 
         public ulong MoveTargets(int member)
@@ -219,6 +243,11 @@ namespace AlbedoGambit.Prototype
             if (Phase != BattlePhase.Battle || Side != BattleSide.Player || Result != BattleResult.Ongoing) return false;
             MovementSpent = ActionSpent = false; ActingMember = -1;
             if (ParticipantCount == 4) { PlayerTurn++; return true; }
+            BeginEnemyTurn();
+            return true;
+        }
+        private void BeginEnemyTurn()
+        {
             Side = BattleSide.Enemy;
             for (int i = 0; i < ParticipantCount - 4; i++)
             {
@@ -226,12 +255,16 @@ namespace AlbedoGambit.Prototype
                 if (!IsKnockedOut(candidate))
                 { ActingMember = candidate; nextEnemy = 4 + (candidate - 3) % (ParticipantCount - 4); break; }
             }
-            return true;
         }
         public bool CompleteEnemyTurn()
         {
             if (Phase != BattlePhase.Battle || Side != BattleSide.Enemy || Result != BattleResult.Ongoing) return false;
             Side = BattleSide.Player; ActingMember = -1;
+            if (OrderedEnemyMovement)
+            {
+                SelectedMember = nextPlayerSlot == 1 ? 2 : nextPlayerSlot == 2 ? 1 : nextPlayerSlot;
+                nextPlayerSlot = (nextPlayerSlot + 1) % 4;
+            }
             MovementSpent = ActionSpent = false; PlayerTurn++; return true;
         }
     }

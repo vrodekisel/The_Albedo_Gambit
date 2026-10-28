@@ -69,7 +69,7 @@ namespace AlbedoGambit.Prototype
         {
             if (party == null) return;
             bool ended = combat != null ? combat.EndTurn() : party.EndPreviewTurn();
-            if (ended) Notice(combat == null ? "Next turn — enemy actions are not connected yet" : "Turn ended");
+            if (ended) Notice(party.Battle.OrderedEnemyMovement ? "" : combat == null ? "Next turn — enemy actions are not connected yet" : "Turn ended");
             Refresh();
         }
         private void Notice(string message) { notice = message; noticeUntil = Time.unscaledTime + 4; Refresh(); }
@@ -98,7 +98,11 @@ namespace AlbedoGambit.Prototype
             healthFill.enabled = healthRatio > 0;
             manaLabel.text = "Ultimate Mana   — / 3";
             hint.text = "Abilities not implemented yet";
-            turnLabel.text = state.ActingMember >= 0 && state.Side == BattleSide.Player
+            turnLabel.text = state.Side == BattleSide.Enemy
+                ? "Enemy turn  ·  " + state.RoleOf(state.ActingMember)
+                : state.OrderedEnemyMovement
+                ? "Turn " + state.PlayerTurn + "  ·  " + heroes[state.SelectedMember].name + " — your turn"
+                : state.ActingMember >= 0 && state.Side == BattleSide.Player
                 ? "Turn " + state.PlayerTurn + "  ·  " + heroes[state.ActingMember].name + " — hero locked"
                 : !string.IsNullOrEmpty(notice) && Time.unscaledTime < noticeUntil ? notice : "Turn " + state.PlayerTurn + "  ·  click a highlighted cell";
             endTurnButton.interactable = !party.IsBattleMoving && state.Phase == BattlePhase.Battle && state.Side == BattleSide.Player && state.Result == BattleResult.Ongoing;
@@ -116,7 +120,7 @@ namespace AlbedoGambit.Prototype
                 abilityIcons[i].sprite = art.icons[i];
                 abilityLabels[i].text = art.abilities[i];
                 abilityBackgrounds[i].color = art.color;
-                abilityButtons[i].interactable = !paused && state.Phase == BattlePhase.Battle;
+                abilityButtons[i].interactable = !paused && state.Phase == BattlePhase.Battle && state.Side == BattleSide.Player;
             }
         }
         public bool PointerOverUI(Vector2 position)

@@ -2391,6 +2391,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::AlbedoGambit.Prototype.BattleEnemySpawner
   enemyPrefab: {fileID: 6880832412112769186, guid: f62b554c1da076e4fa23c4f2e590ad03, type: 3}
+  enableMovement: 1
 --- !u!1001 &3467655633856116675
 PrefabInstance:
   m_ObjectHideFlags: 0

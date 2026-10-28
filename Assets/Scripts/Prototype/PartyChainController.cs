@@ -160,7 +160,14 @@ namespace AlbedoGambit.Prototype
             movement.y = 0;
             movement = Vector3.ClampMagnitude(movement, 1);
             UpdateSelection();
-            if (mode == PartyMode.Chess) { TickBattleMovement(dt); return; }
+            if (mode == PartyMode.Chess)
+            {
+                TickBattleMovement(dt);
+                GetComponent<BattleEnemySpawner>()?.TickMovement(battle, battleBoard, dt);
+                selected = battle.SelectedMember;
+                UpdateSelection();
+                return;
+            }
             if (mode == PartyMode.Separated)
             {
                 for (int i = 0; i < 4; i++)
@@ -394,7 +401,7 @@ namespace AlbedoGambit.Prototype
             var enemies = GetComponent<BattleEnemySpawner>();
             if (enemies != null && !enemies.IsConfigured) { statusMessage = "Не задан префаб противника."; return false; }
             int[] starts = enemies != null ? new[] { 23, 39, 31, 47, 16, 24, 32, 40 } : new[] { 23, 39, 31, 47 };
-            if (!battle.TryBeginPlacement(board.ActiveMask, board.BlockedMask, starts))
+            if (!battle.TryBeginPlacement(board.ActiveMask, board.BlockedMask, starts, enemies != null && enemies.MovementEnabled))
             {
                 statusMessage = "Не удалось начать расстановку: проверь клетки H3–H6, A3–A6 и текущий режим.";
                 return false;
@@ -418,7 +425,9 @@ namespace AlbedoGambit.Prototype
             if (battleView == null) battleView = GetComponent<BattleBoardView>();
             if (battleView == null) battleView = gameObject.AddComponent<BattleBoardView>();
             battleView.Bind(this, board);
-            statusMessage = "ЛКМ по герою — выбор; по подсвеченной клетке — ход. End Turn — следующий ход.";
+            statusMessage = battle.OrderedEnemyMovement
+                ? "Герои ходят по очереди. ЛКМ по подсвеченной клетке — ход. End Turn — завершить ход героя."
+                : "ЛКМ по герою — выбор; по подсвеченной клетке — ход. End Turn — следующий ход.";
             UpdateSelection();
             return true;
         }
@@ -545,12 +554,13 @@ namespace AlbedoGambit.Prototype
             jumpInput = false;
         }
 
-        // Spawn-only milestone: the enemy side explicitly passes, without movement or attacks.
+        // Scenes without the movement milestone retain the previous spawn-only pass.
         public bool EndPreviewTurn()
         {
             if (IsBattleMoving) return false;
             if (!battle.EndPlayerTurn()) return false;
-            if (GetComponent<BattleEnemySpawner>() != null && Combat == null && battle.Side == BattleSide.Enemy)
+            var enemies = GetComponent<BattleEnemySpawner>();
+            if (enemies != null && !enemies.MovementEnabled && Combat == null && battle.Side == BattleSide.Enemy)
                 battle.CompleteEnemyTurn();
             return true;
         }
