@@ -2314,6 +2314,14 @@ PrefabInstance:
       propertyPath: m_Name
       value: Party - A B C D
       objectReference: {fileID: 0}
+    - target: {fileID: 3333813817663380453, guid: 169f2b2ac68ce564eb04f0dabd5098b2, type: 3}
+      propertyPath: m_LocalPosition.x
+      value: -1.1
+      objectReference: {fileID: 0}
+    - target: {fileID: 680753600026619500, guid: 169f2b2ac68ce564eb04f0dabd5098b2, type: 3}
+      propertyPath: m_LocalPosition.x
+      value: -2.2
+      objectReference: {fileID: 0}
     - target: {fileID: 4412516289718435879, guid: 169f2b2ac68ce564eb04f0dabd5098b2, type: 3}
       propertyPath: m_LocalPosition.x
       value: 1.65

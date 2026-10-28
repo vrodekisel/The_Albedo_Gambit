@@ -30,7 +30,7 @@ public static class EnemyMovementValidation
     private static BattleSession Fixture(ulong blocked = 0, ulong active = ulong.MaxValue)
     {
         var state = new BattleSession();
-        Check(state.TryBeginPlacement(active, blocked, new[] { 8, 16, 24, 32, 27, 0, 7, 63 }, true), "Placement");
+        Check(state.TryBeginPlacement(active, blocked, new[] { 8, 16, 24, 32, 27, 7, 0, 63 }, true), "Placement");
         Check(state.CompletePlacement(), "Placement completed"); return state;
     }
     private static void NextEnemy(BattleSession state) { state.CompleteEnemyTurn(); state.EndPlayerTurn(); }
@@ -41,19 +41,19 @@ public static class EnemyMovementValidation
         Check(state.MoveTargets(4) == Mask(10, 12, 17, 21, 33, 37, 42, 44), "Knight exact legal cells");
         Check(!state.TryMove(0, 9) && !state.TrySelect(0) && !state.EndPlayerTurn(), "Player commands rejected during enemy turn");
         NextEnemy(state);
-        Check(state.MoveTargets(5) == Mask(1, 2, 3, 4, 5, 6), "Rook stopped by both teams");
+        Check(state.MoveTargets(5) == Mask(14, 21, 28, 35, 42, 49, 56), "Bishop exact legal cells");
         NextEnemy(state);
-        Check(state.MoveTargets(6) == Mask(14, 21, 28, 35, 42, 49, 56), "Bishop exact legal cells");
+        Check(state.MoveTargets(6) == Mask(1, 2, 3, 4, 5, 6), "Rook stopped by both teams");
         NextEnemy(state);
         Check(state.MoveTargets(7) == Mask(54, 55, 62), "King exact legal cells");
         state = Fixture(Mask(10, 19, 20), ulong.MaxValue ^ Mask(12));
         Check(state.MoveTargets(4) == Mask(17, 21, 33, 37, 42, 44), "Knight jumps intermediate blocked cells; rejects blocked/missing landing");
         state = Fixture(Mask(3, 21)); NextEnemy(state);
-        Check(state.MoveTargets(5) == Mask(1, 2), "Obstacle stops rook ray"); NextEnemy(state);
-        Check(state.MoveTargets(6) == Mask(14), "Obstacle stops bishop ray");
+        Check(state.MoveTargets(5) == Mask(14), "Obstacle stops bishop ray"); NextEnemy(state);
+        Check(state.MoveTargets(6) == Mask(1, 2), "Obstacle stops rook ray");
         state = Fixture(0, ulong.MaxValue ^ Mask(3, 21)); NextEnemy(state);
-        Check(state.MoveTargets(5) == Mask(1, 2), "Missing cell stops rook ray"); NextEnemy(state);
-        Check(state.MoveTargets(6) == Mask(14), "Missing cell stops bishop ray");
+        Check(state.MoveTargets(5) == Mask(14), "Missing cell stops bishop ray"); NextEnemy(state);
+        Check(state.MoveTargets(6) == Mask(1, 2), "Missing cell stops rook ray");
         state = Fixture(Mask(10, 12, 17, 21, 33, 37, 42, 44));
         Check(BattleEnemyMovement.ChooseDestination(state, 4) == -1, "Surrounded knight passes");
         state = Fixture();
@@ -61,7 +61,7 @@ public static class EnemyMovementValidation
         Check(target == 17, "Move closes distance to nearest hero with deterministic tie break");
         Check(state.TryMove(4, target) && !state.TryMove(4, 27), "Only one movement");
         Check(state.OccupantAt(27) == -1 && state.OccupantAt(target) == 4, "Atomic occupancy transfer");
-        int[] order = { 0, 2, 1, 3 };
+        int[] order = { 0, 1, 2, 3 };
         for (int i = 0; i < 12; i++)
         {
             Check(state.ActingMember == 4 + i % 4, "Enemy rotation");
@@ -95,6 +95,10 @@ public static class EnemyMovementValidation
         Check(spawner.MovementEnabled && party.EnterChessMode(board), "Scene opted in and starts");
         var state = party.Battle;
         hud.Refresh();
+        Check(state.CellOf(1) == 31 && state.CellOf(2) == 39, "Mia is before Joseph on the board");
+        Check(party.CurrentFormationSlot(1) == 1 && party.CurrentFormationSlot(2) == 2, "Party follows A-B-C-D");
+        Check(hud.heroButtons[1].transform.position.x < hud.heroButtons[2].transform.position.x,
+            "Mia card is before Joseph card");
         Check(state.Side == BattleSide.Enemy && !hud.endTurnButton.interactable && hud.heroButtons.All(b => !b.interactable), "Enemy starts with blocked player UI");
         for (int i = 0; i < 4; i++)
         {
@@ -114,7 +118,7 @@ public static class EnemyMovementValidation
         Check(jumping.transform.position == position && state.CellOf(4) == cell, "Pause freezes animation and logical state");
         party.TogglePause(); Tick(party, 50);
         Check(state.Side == BattleSide.Player && party.SelectedIndex == 0 && state.PlayerTurn == 1, "First hero after initial enemy move");
-        int[] order = { 0, 2, 1, 3 };
+        int[] order = { 0, 1, 2, 3 };
         for (int turn = 0; turn < 16; turn++)
         {
             Check(party.SelectedIndex == order[turn % 4], "Scene hero queue");
@@ -155,7 +159,7 @@ public static class EnemyMovementValidation
         party.ExitChessMode();
         // A board consisting only of the eight start cells guarantees no legal knight move.
         var cells = Enumerable.Range(0, 64).Select(board.CellTransform).ToArray();
-        int[] starts = { 23, 39, 31, 47, 16, 24, 32, 40 };
+        int[] starts = { 23, 31, 39, 47, 16, 24, 32, 40 };
         board.Configure(cells.Select((c, i) => starts.Contains(i) ? c : null).ToArray());
         Check(party.EnterChessMode(board), "Blocked fixture enters"); Tick(party, 80);
         Check(state.Side == BattleSide.Player && state.CellOf(4) == 16, "No legal move automatically passes in scene");

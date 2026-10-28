@@ -72,6 +72,9 @@ namespace AlbedoGambit.Prototype
         // Identity remains A/B/C/D; formation slots are A/C/B/D.
         public static int FormationSlot(int actor) => actor == 1 ? 2 : actor == 2 ? 1 : actor;
         public static int ActorAtSlot(int slot) => FormationSlot(slot);
+        // The new A-B-C-D formation is enabled only for the room's encounter.
+        public int CurrentFormationSlot(int actor) => GetComponent<BattleEnemySpawner>()?.MovementEnabled == true ? actor : FormationSlot(actor);
+        private int CurrentActorAtSlot(int slot) => GetComponent<BattleEnemySpawner>()?.MovementEnabled == true ? slot : ActorAtSlot(slot);
         public int StoredPathPoints => path.Count;
 
         public void Configure(CapsuleMotor[] orderedMembers) { members = orderedMembers; }
@@ -204,7 +207,7 @@ namespace AlbedoGambit.Prototype
             float total = path[path.Count - 1].distance;
             for (int i = 1; i < 4; i++)
             {
-                float limit = Mathf.Max(path[0].distance, total - spacing * FormationSlot(i));
+                float limit = Mathf.Max(path[0].distance, total - spacing * CurrentFormationSlot(i));
                 Vector3 position = members[i].Body.position;
                 // Rejoin the current formation slot. Requiring every old breadcrumb
                 // deadlocks after a collision or when A reverses through the chain.
@@ -218,7 +221,7 @@ namespace AlbedoGambit.Prototype
                 foreach (var marker in jumps)
                 {
                     if ((marker.consumedMask & (1 << i)) != 0) continue;
-                    bool ready = elapsed >= marker.time + .18f * FormationSlot(i);
+                    bool ready = elapsed >= marker.time + .18f * CurrentFormationSlot(i);
                     if (ready) { pending = marker; break; }
                 }
                 if (members[i].Tick(velocity, pending != null, dt) && pending != null)
@@ -374,7 +377,7 @@ namespace AlbedoGambit.Prototype
                 found = true;
                 for (int i = 1; i < 4; i++)
                 {
-                    var slot = anchor + direction * spacing * FormationSlot(i);
+                    var slot = anchor + direction * spacing * CurrentFormationSlot(i);
                     if (navigation != null && navigation.EnsureReady())
                     {
                         if (!NavMesh.SamplePosition(slot, out var hit, .25f, NavMesh.AllAreas) ||
@@ -400,7 +403,8 @@ namespace AlbedoGambit.Prototype
             // Opposite board edges are an explicit debug fixture, not the future placement solver.
             var enemies = GetComponent<BattleEnemySpawner>();
             if (enemies != null && !enemies.IsConfigured) { statusMessage = "Не задан префаб противника."; return false; }
-            int[] starts = enemies != null ? new[] { 23, 39, 31, 47, 16, 24, 32, 40 } : new[] { 23, 39, 31, 47 };
+            int[] starts = enemies != null && enemies.MovementEnabled ? new[] { 23, 31, 39, 47, 16, 24, 32, 40 }
+                : enemies != null ? new[] { 23, 39, 31, 47, 16, 24, 32, 40 } : new[] { 23, 39, 31, 47 };
             if (!battle.TryBeginPlacement(board.ActiveMask, board.BlockedMask, starts, enemies != null && enemies.MovementEnabled))
             {
                 statusMessage = "Не удалось начать расстановку: проверь клетки H3–H6, A3–A6 и текущий режим.";
@@ -415,7 +419,7 @@ namespace AlbedoGambit.Prototype
                 explorationPositions[i] = members[i].Body.position;
                 explorationRotations[i] = members[i].Body.rotation;
                 members[i].Body.isKinematic = false;
-                members[i].ResetTo(board.CellCenter(7, 2 + FormationSlot(i)) + Vector3.up * .015f, Quaternion.identity);
+                members[i].ResetTo(board.CellCenter(7, 2 + CurrentFormationSlot(i)) + Vector3.up * .015f, Quaternion.identity);
                 members[i].Body.isKinematic = true;
             }
             Physics.SyncTransforms();
@@ -528,11 +532,11 @@ namespace AlbedoGambit.Prototype
             float distance = 0;
             for (int slot = 3; slot >= 0; slot--)
             {
-                int i = ActorAtSlot(slot);
-                if (slot < 3) distance += FlatDistance(members[ActorAtSlot(slot + 1)].Body.position, members[i].Body.position);
+                int i = CurrentActorAtSlot(slot);
+                if (slot < 3) distance += FlatDistance(members[CurrentActorAtSlot(slot + 1)].Body.position, members[i].Body.position);
                 path.Add(new PathPoint { position = members[i].Body.position, distance = distance });
             }
-            Vector3 heading = FlatDirection(members[0].Body.position - members[ActorAtSlot(1)].Body.position);
+            Vector3 heading = FlatDirection(members[0].Body.position - members[CurrentActorAtSlot(1)].Body.position);
             if (heading.sqrMagnitude > .01f) lastDirection = heading;
         }
 

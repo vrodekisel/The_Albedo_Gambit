@@ -33,6 +33,7 @@ namespace AlbedoGambit.Prototype
         private float noticeUntil;
         private readonly List<RaycastResult> hits = new List<RaycastResult>();
         private static readonly int[] DisplayOrder = { 0, 2, 1, 3 };
+        private static readonly int[] OrderedDisplayOrder = { 0, 1, 2, 3 };
         public bool IsShowingBattle => party != null && party.Mode == PartyMode.Chess;
 
         private void Awake() { if (party != null) Bind(party); else content.SetActive(false); }
@@ -107,7 +108,7 @@ namespace AlbedoGambit.Prototype
                 : !string.IsNullOrEmpty(notice) && Time.unscaledTime < noticeUntil ? notice : "Turn " + state.PlayerTurn + "  ·  click a highlighted cell";
             endTurnButton.interactable = !party.IsBattleMoving && state.Phase == BattlePhase.Battle && state.Side == BattleSide.Player && state.Result == BattleResult.Ongoing;
             float x = 24;
-            foreach (int actor in DisplayOrder)
+            foreach (int actor in state.OrderedEnemyMovement ? OrderedDisplayOrder : DisplayOrder)
             {
                 var rect = (RectTransform)heroButtons[actor].transform;
                 float size = actor == selected ? 197 : 127;

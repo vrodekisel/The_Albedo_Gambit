@@ -43,12 +43,12 @@ namespace AlbedoGambit.Prototype
         {
             if (member >= 0 && member < 4) return (ChessRole)member;
             if (!OrderedEnemyMovement) return ChessRole.King;
-            // Reverse of the player's board formation: A, C, B, D -> D, B, C, A.
+            // Reverse of the player's board formation: A, B, C, D -> D, C, B, A.
             switch (member)
             {
                 case 4: return ChessRole.Knight;
-                case 5: return ChessRole.Rook;
-                case 6: return ChessRole.Bishop;
+                case 5: return ChessRole.Bishop;
+                case 6: return ChessRole.Rook;
                 default: return ChessRole.King;
             }
         }
@@ -262,7 +262,7 @@ namespace AlbedoGambit.Prototype
             Side = BattleSide.Player; ActingMember = -1;
             if (OrderedEnemyMovement)
             {
-                SelectedMember = nextPlayerSlot == 1 ? 2 : nextPlayerSlot == 2 ? 1 : nextPlayerSlot;
+                SelectedMember = nextPlayerSlot;
                 nextPlayerSlot = (nextPlayerSlot + 1) % 4;
             }
             MovementSpent = ActionSpent = false; PlayerTurn++; return true;
