@@ -49,6 +49,21 @@ public static class Level02SceneValidation
         int proxyCount = proxies.GetComponentsInChildren<BoxCollider>(true).Length;
         Require(visualCount >= 40 && proxyCount > 20 && GameObject.Find("Floor Perimeter - Invisible Walls").GetComponentsInChildren<BoxCollider>().Length >= 90,
             "Visible model and obstacle proxies imported; visual=" + visualCount + " proxies=" + proxyCount);
+        foreach (var pair in new[] {
+            new[] { "COL_House01_Rear_Ivory_BODY", "House01_Rear_Ivory" },
+            new[] { "COL_House02_Foreground_Ochre_BODY", "House02_Foreground_Ochre" },
+            new[] { "COL_Front_Oak01_TRUNK", "Front_Oak01" },
+            new[] { "COL_Rear_Oak01_TRUNK", "Rear_Oak01" },
+            new[] { "COL_Pine01_Tall_TRUNK", "Pine01_Tall" } })
+        {
+            var collider = proxies.GetComponentsInChildren<BoxCollider>().First(c => c.name == pair[0]);
+            var model = art.GetComponentsInChildren<Transform>().First(t => t.name == pair[1]);
+            Vector2 colliderPoint = new Vector2(collider.bounds.center.x, collider.bounds.center.z);
+            Vector2 modelPoint = new Vector2(model.position.x, model.position.z);
+            Require(Vector2.Distance(colliderPoint, modelPoint) < .05f &&
+                    collider.bounds.min.y <= model.position.y + .05f,
+                "Collider aligns with visible model " + pair[1]);
+        }
         var ground = art.GetComponentsInChildren<MeshRenderer>(true).First(r => r.name == "Ground");
         Require(ground.sharedMaterial != null && ground.sharedMaterial.GetTexture("_BaseMap") != null,
             "Painted ground texture assigned");

@@ -11,6 +11,74 @@ public static class Level02SceneSetup
     private const string Root = "Assets/Art/Level02";
     private const string ScenePath = "Assets/Scenes/Level02Prototype.unity";
 
+    [MenuItem("Tools/Albedo/Clean Level 02 Collision Proxies")]
+    public static void RemoveRedundantProxies()
+    {
+        var scene = EditorSceneManager.OpenScene(ScenePath);
+        var proxies = GameObject.Find("Level 02 Collision Proxies");
+        if (!proxies) throw new InvalidOperationException("Level 02 collision root is missing.");
+        CleanProxies(proxies, false);
+        AlignProxies(proxies, GameObject.Find("Level 02 Art"));
+        EditorSceneManager.SaveScene(scene);
+        Debug.Log("LEVEL02_REDUNDANT_PROXIES_REMOVED");
+    }
+
+    private static void CleanProxies(GameObject root, bool createColliders)
+    {
+        // The old Blender contour covers a smaller zone. The full Ground mesh
+        // has its own collider and perimeter; house bodies already block roofs.
+        if (PrefabUtility.IsPartOfPrefabInstance(root))
+            PrefabUtility.UnpackPrefabInstance(root, PrefabUnpackMode.Completely, InteractionMode.AutomatedAction);
+        foreach (var filter in root.GetComponentsInChildren<MeshFilter>(true))
+        {
+            if (filter.name.StartsWith("COL_BOUNDARY") || filter.name == "COL_WALKABLE_GROUND" ||
+                filter.name.EndsWith("_ROOF"))
+            {
+                UnityEngine.Object.DestroyImmediate(filter.gameObject);
+                continue;
+            }
+            var renderer = filter.GetComponent<MeshRenderer>();
+            if (renderer) renderer.enabled = false;
+            if (!createColliders || filter.TryGetComponent<BoxCollider>(out _)) continue;
+            var box = filter.gameObject.AddComponent<BoxCollider>();
+            box.center = filter.sharedMesh.bounds.center;
+            box.size = filter.sharedMesh.bounds.size;
+        }
+    }
+
+    private static void AlignProxies(GameObject proxies, GameObject visual)
+    {
+        if (!visual) throw new InvalidOperationException("Level 02 art is missing.");
+        var art = new Dictionary<string, Transform>();
+        foreach (var item in visual.GetComponentsInChildren<Transform>(true)) art[item.name] = item;
+        var fence = art["Garden_Fence"].GetComponent<Renderer>().bounds;
+        int aligned = 0;
+        foreach (var box in proxies.GetComponentsInChildren<BoxCollider>(true))
+        {
+            string name = box.name;
+            Vector3 position;
+            if (name == "COL_Garden_Back_Fence")
+                position = new Vector3(fence.center.x, 0, fence.max.z - box.bounds.extents.z);
+            else if (name == "COL_Garden_Right_Fence")
+                position = new Vector3(fence.max.x - box.bounds.extents.x, 0, fence.center.z);
+            else
+            {
+                string visualName = name.Substring(4);
+                if (visualName.EndsWith("_TRUNK")) visualName = visualName.Substring(0, visualName.Length - 6);
+                else if (visualName.EndsWith("_BODY")) visualName = visualName.Substring(0, visualName.Length - 5);
+                else if (visualName.StartsWith("SHRUB_") && int.TryParse(visualName.Substring(6), out int shrubIndex))
+                    visualName = "Shrub_" + shrubIndex.ToString("00");
+                if (!art.TryGetValue(visualName, out var target))
+                    throw new InvalidOperationException("No visible model for collision proxy " + name);
+                position = target.position;
+            }
+            position.y += box.bounds.extents.y;
+            box.transform.position = position;
+            aligned++;
+        }
+        Debug.Log("LEVEL02_PROXIES_ALIGNED " + aligned);
+    }
+
     [Serializable] private sealed class MaterialCatalog { public MaterialEntry[] materials; }
     [Serializable] private sealed class MaterialEntry { public string name; public float[] color; public string texture; public float roughness; public float metallic; }
     [Serializable] private sealed class Layout
@@ -66,16 +134,8 @@ public static class Level02SceneSetup
 
         var proxies = (GameObject)PrefabUtility.InstantiatePrefab(proxyAsset);
         proxies.name = "Level 02 Collision Proxies";
-        foreach (var filter in proxies.GetComponentsInChildren<MeshFilter>(true))
-        {
-            var renderer = filter.GetComponent<MeshRenderer>();
-            if (renderer != null) renderer.enabled = false;
-            // Replace the old authored playable contour with the full actual floor perimeter.
-            if (filter.name.StartsWith("COL_BOUNDARY")) continue;
-            var box = filter.gameObject.AddComponent<BoxCollider>();
-            box.center = filter.sharedMesh.bounds.center;
-            box.size = filter.sharedMesh.bounds.size;
-        }
+        CleanProxies(proxies, true);
+        AlignProxies(proxies, visual);
 
         var navigation = new GameObject("Level 02 Navigation").AddComponent<PrototypeNavigation>();
         navigation.ConfigureGround(ground);
