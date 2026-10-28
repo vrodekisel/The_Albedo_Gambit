@@ -61,8 +61,13 @@ public static class BattleMovementValidation
         var board = UnityEngine.Object.FindFirstObjectByType<BoardGrid>();
         var hud = UnityEngine.Object.FindFirstObjectByType<BattleHud>();
         party.Initialize(); hud.Bind(party); party.ResetParty();
+        Check(!board.IsBattleVisible && board.GetComponentsInChildren<Renderer>().All(r => !r.enabled) &&
+              board.GetComponentsInChildren<Collider>().All(c => !c.enabled), "Board hidden and nonphysical while exploring");
         var start = party.Members.Select(m => m.Body.position).ToArray();
         Check(party.EnterChessMode(board), "Scene battle entry");
+        Check(board.IsBattleVisible && board.GetComponentsInChildren<Renderer>().All(r => r.enabled) &&
+              board.GetComponentsInChildren<Collider>().All(c => c.enabled && c.isTrigger),
+              "Battle board visible and all click colliders are nonphysical triggers");
         var view = party.GetComponent<BattleBoardView>(); view.RefreshHighlights(); hud.Refresh(); Canvas.ForceUpdateCanvases();
         Check(view.HighlightedMoves == party.Battle.MoveTargets(0) && view.HighlightedMoves != 0, "Highlights match model");
         var uiPoint = RectTransformUtility.WorldToScreenPoint(null, hud.heroButtons[0].transform.TransformPoint(new Vector3(35, -35, 0)));
@@ -87,9 +92,12 @@ public static class BattleMovementValidation
         party.SelectMember(3); Check(view.ClickCell(30), "Knight L command"); party.Tick(Vector3.zero, false, .1f);
         Check(party.Members[3].Body.position.y > board.CellCenter(6, 3).y + .5f, "Knight animated jump"); Finish(party);
         party.ExitChessMode();
+        Check(!board.IsBattleVisible && board.GetComponentsInChildren<Renderer>().All(r => !r.enabled) &&
+              board.GetComponentsInChildren<Collider>().All(c => !c.enabled), "Board hides again after battle");
         for (int i = 0; i < 4; i++) Check(Vector3.Distance(start[i], party.Members[i].Body.position) < .001f, "Exploration position restored after movement");
         view.RefreshHighlights(); Check(view.HighlightedMoves == 0, "No stale highlights outside battle");
         party.EnterChessMode(board); view.ClickCell(14); party.ResetParty(); Finish(party);
+        Check(!board.IsBattleVisible, "Reset hides battle board");
         Check(!party.IsBattleMoving && party.Battle.Phase == BattlePhase.Exploration, "Reset cancels pending movement");
         party.EnterChessMode(board); party.SelectMember(3); hud.Refresh(); view.RefreshHighlights(); Capture(hud, "Movement-Knight");
         File.WriteAllText("Logs/BattleMovementValidation.txt", "PASS: Exact king/rook/bishop/knight masks; all participant ray blocking; enemies/blocked/missing cells; occupied endpoints; invalid commands.\nPASS: Camera ray click and UI exclusion; animation/pause; model-body sync; all selection paths locked after action; one move; End Turn unlock; enemy pass; exploration restoration and reset cleanup.\n");

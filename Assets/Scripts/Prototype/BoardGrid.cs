@@ -8,6 +8,20 @@ namespace AlbedoGambit.Prototype
         [SerializeField] private Transform[] cells = new Transform[64];
         [Tooltip("Cell indices (rank * 8 + file) excluded from placement. Missing cell transforms are holes.")]
         [SerializeField] private int[] blockedCells = new int[0];
+        public bool IsBattleVisible { get; private set; }
+
+        private void Awake() { SetBattleVisible(false); }
+
+        public void SetBattleVisible(bool visible)
+        {
+            IsBattleVisible = visible;
+            foreach (var renderer in GetComponentsInChildren<Renderer>(true)) renderer.enabled = visible;
+            foreach (var collider in GetComponentsInChildren<Collider>(true))
+            {
+                collider.isTrigger = true; // Click target, never a physical step or NavMesh obstacle.
+                collider.enabled = visible;
+            }
+        }
         public Transform CellTransform(int index) => index >= 0 && index < 64 && index < cells.Length ? cells[index] : null;
         public ulong ActiveMask
         {

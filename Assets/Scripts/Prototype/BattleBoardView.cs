@@ -71,7 +71,7 @@ namespace AlbedoGambit.Prototype
         private int CellUnderPointer(Vector2 screen)
         {
             var camera = Camera.main;
-            if (camera == null || board == null || !Physics.Raycast(camera.ScreenPointToRay(screen), out var hit, 1000, ~0, QueryTriggerInteraction.Ignore)) return -1;
+            if (camera == null || board == null || !Physics.Raycast(camera.ScreenPointToRay(screen), out var hit, 1000, ~0, QueryTriggerInteraction.Collide)) return -1;
             var member = hit.collider.GetComponentInParent<PartyMember>();
             if (member != null)
                 for (int i = 0; i < party.Members.Length; i++)

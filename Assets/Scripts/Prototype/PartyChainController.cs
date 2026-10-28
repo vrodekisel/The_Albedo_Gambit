@@ -401,6 +401,7 @@ namespace AlbedoGambit.Prototype
             }
             explorationMode = mode == PartyMode.Regrouping ? PartyMode.Separated : mode;
             battleBoard = board; movingMember = -1;
+            board.SetBattleVisible(true);
             explorationSelection = selected;
             for (int i = 0; i < 4; i++)
             {
@@ -425,7 +426,9 @@ namespace AlbedoGambit.Prototype
         public void ExitChessMode()
         {
             if (mode != PartyMode.Chess || battle.Phase != BattlePhase.Battle) return;
-            movingMember = -1; battleBoard = null;
+            movingMember = -1;
+            if (battleBoard != null) battleBoard.SetBattleVisible(false);
+            battleBoard = null;
             for (int i = 0; i < 4; i++)
             {
                 members[i].Body.isKinematic = false;
@@ -527,7 +530,9 @@ namespace AlbedoGambit.Prototype
         public void ResetParty()
         {
             if (!initialized) return;
-            movingMember = -1; battleBoard = null;
+            movingMember = -1;
+            if (battleBoard != null) battleBoard.SetBattleVisible(false);
+            battleBoard = null;
             RestoreTimeScale();
             GetComponent<BattleEnemySpawner>()?.Hide();
             battle.Reset();

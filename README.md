@@ -1,65 +1,62 @@
 # The Albedo Gambit
 
-Для нового уровня используйте [сцену-шаблон](Assets/Scenes/GameplayTemplate.unity). Проверка переноса на существующую модель Blender находится в [Level02Prototype](Assets/Scenes/Level02Prototype.unity); состав этапа и ограничения описаны в [Stage1Handoff](Docs/Stage1Handoff.md).
+An early isometric 3D game prototype in Unity. A party of four characters explores locations; story-driven tactical encounters will introduce chess-inspired movement and abilities.
 
-Прототип изометрической 3D-игры на Unity: исследование локаций отрядом из четырёх персонажей и запланированные сюжетные эпизоды с шахматными механиками.
+The project currently tests party control, Rigidbody movement, and a reusable battle scene. [ChessRoomBlockout](Assets/Scenes/ChessRoomBlockout.unity) is the development playground. [GameplayTemplate](Assets/Scenes/GameplayTemplate.unity) provides a starting point for new levels, and [Level02Prototype](Assets/Scenes/Level02Prototype.unity) tests the same gameplay prefabs with an imported Blender environment. See the [stage-one handoff](Docs/Stage1Handoff.md) for the current scope and limitations.
 
-Проект находится на ранней стадии. Сейчас это площадка для проверки управления, физики и поведения отряда. В нём есть тестовая комната и прототип уровня на основе модели Blender.
+## Characters
 
-## Персонажи
-
-| Персонаж | Цвет | Будущая шахматная роль |
+| Character | Color | Chess-inspired role |
 | --- | --- | --- |
-| A | Белый | Король |
-| B | Красный | Ладья |
-| C | Зелёный | Слон |
-| D | Синий | Конь |
+| A | White | King |
+| B | Red | Rook |
+| C | Green | Bishop |
+| D | Blue | Knight |
 
-## Что уже можно попробовать
+## What you can try
 
-- Свободное движение с физикой Rigidbody и последовательные прыжки.
-- Следование цепочкой A → C → B → D (белая, зелёная, красная, синяя), обход препятствий спутниками и догоняние отряда.
-- Разделение группы, управление отдельными персонажами и сбор обратно к A.
-- Тестовую комнату с доской 8 × 8 и кубами-препятствиями.
-- Отладочное переключение между свободным движением и расстановкой на доске.
-- Выбор героя на доске клавишами или мышью, подсветку клеток и паузу.
-- Перемещение кликом по зелёной подсветке по правилам короля, ладьи, слона и коня. После первого действия выбор героя блокируется до End Turn; одно перемещение за ход.
-- Боевой интерфейс по Figma: карточки четырёх героев, здоровье, Menu/Resume и End Turn. Способности и мана пока обозначены как недоступные.
-- Герои появляются на H3–H6, четыре чёрные капсулы противников — на A3–A6 при входе в бой и скрываются при выходе/сбросе. Их действия пока не подключены: End Turn пропускает сторону противника и начинает следующий тестовый ход.
+- Free movement with Rigidbody physics and sequential jumps.
+- Party following in A → C → B → D order, obstacle avoidance, and catch-up behavior.
+- Splitting the party, controlling individual characters, and regrouping around A.
+- A test room with an 8 × 8 board and obstacle cubes.
+- A debug switch between exploration and battle. The board is hidden during exploration and appears in battle; it has no physical collision.
+- Character selection, legal-move highlights, and mouse-driven movement using the king, rook, bishop, and knight patterns. The first action locks the active hero until **End Turn**; each turn allows one movement.
+- A Figma-based battle HUD with four character cards, health, **Menu / Resume**, and **End Turn**. Abilities and mana are placeholders.
+- Four black enemy capsules spawn on A3–A6 opposite the heroes on H3–H6. They disappear on exit or reset. Enemy actions are not implemented yet, so **End Turn** currently passes the enemy side.
 
-Атаки в сцене, магия, действия противников и кат-сцены пока не подключены. В дальнейшем шахматные эпизоды будут запускаться по сюжету после кат-сцен; простой вход на доску режим не меняет.
+Attacks, magic, enemy behavior, and cutscenes are not yet connected to the scene. In the planned game, story events will start tactical encounters; simply walking onto the board will not change modes.
 
-## Запуск
+## Getting started
 
-1. Клонируйте репозиторий с поддержкой Git LFS, например через GitHub Desktop. Если появится запрос, выберите **Initialize Git LFS**.
-2. Добавьте папку проекта в Unity Hub и откройте её в **Unity 6000.3.8f1 (Unity 6.3 LTS)**.
-3. Дождитесь импорта ресурсов и откройте `Assets/Scenes/ChessRoomBlockout.unity`.
-4. Нажмите **Play**, затем щёлкните по окну **Game**.
+1. Clone the repository with Git LFS support, for example through GitHub Desktop. If prompted, choose **Initialize Git LFS**.
+2. Add the project folder to Unity Hub and open it in **Unity 6000.3.8f1 (Unity 6.3 LTS)**.
+3. Wait for asset import, then open `Assets/Scenes/ChessRoomBlockout.unity`.
+4. Press **Play** and focus the **Game** window.
 
-## Управление
+## Controls
 
-| Клавиши | Действие |
+| Input | Action |
 | --- | --- |
-| WASD / стрелки | Движение относительно камеры |
-| Пробел | Прыжок; в цепочке персонажи прыгают по очереди |
-| G | Разделить отряд / собрать к A; отменить текущий сбор |
-| 1–4 | Выбрать персонажа в разделённом отряде |
-| T | Включить / выключить тестовую расстановку на доске |
-| R | Вернуть отряд на старт |
-| ЛКМ по герою / занятой клетке | Выбрать героя в тестовом режиме доски |
-| ЛКМ по зелёной подсветке | Выполнить доступное перемещение |
-| Esc | Пауза / продолжение |
-| ЛКМ по портрету в боевом UI | Просмотреть героя |
-| Menu / Resume | Открыть паузу / продолжить |
-| End Turn | Завершить текущий тестовый ход |
+| WASD / arrow keys | Move relative to the camera |
+| Space | Jump; party members jump in sequence while following |
+| G | Split the party, regroup around A, or cancel regrouping |
+| 1–4 | Select a character while the party is split |
+| T | Toggle the test battle mode |
+| R | Reset the party to its starting positions |
+| Left-click a hero or occupied cell | Select a hero in battle |
+| Left-click a green highlighted cell | Move to a legal destination |
+| Esc | Pause or resume |
+| Left-click a portrait | Select a hero before taking an action |
+| Menu / Resume | Open the pause menu or resume |
+| End Turn | Finish the current test turn |
 
-## Структура проекта
+## Project layout
 
-- `Assets/Scenes` — тестовая комната `ChessRoomBlockout`, основа новых уровней `GameplayTemplate` и карта `Level02Prototype`.
-- `Assets/Prefabs/Prototype` — переиспользуемые префабы отряда и доски.
-- `Assets/Prefabs/UI` — переиспользуемый боевой HUD; [подключение и ограничения](Docs/BattleHUD.md).
-- `Assets/Scripts/Prototype` — управление, физика, следование и сетка доски.
-- `Assets/Editor` — инструменты подготовки и проверки прототипа.
-- `Docs` — технические заметки.
+- `Assets/Scenes` — the blockout, reusable template, and Blender-based level prototype.
+- `Assets/Prefabs/Prototype` — reusable party, board, and enemy prefabs.
+- `Assets/Prefabs/UI` — the battle HUD; see its [setup notes](Docs/BattleHUD.md).
+- `Assets/Scripts/Prototype` — movement, physics, party following, and board rules.
+- `Assets/Editor` — prototype setup and validation tools.
+- `Docs` — development decisions and technical notes.
 
-Подробнее о настройках, ограничениях навигации и переносе механик в другие сцены: [прототип группы и доски](Docs/PartyPrototype.md).
+For movement setup and scene reuse, see the [party and board prototype notes](Docs/PartyPrototype.md).

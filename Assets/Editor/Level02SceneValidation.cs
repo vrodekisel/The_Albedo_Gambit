@@ -40,6 +40,8 @@ public static class Level02SceneValidation
         var party = UnityEngine.Object.FindFirstObjectByType<PartyChainController>();
         Camera.main.aspect = 16f / 9f;
         var board = UnityEngine.Object.FindFirstObjectByType<BoardGrid>();
+        Require(board && !board.IsBattleVisible && board.GetComponentsInChildren<Collider>().All(c => !c.enabled),
+            "Imported level starts with hidden, nonphysical board");
         var hud = UnityEngine.Object.FindFirstObjectByType<BattleHud>();
         var nav = UnityEngine.Object.FindFirstObjectByType<PrototypeNavigation>();
         var art = GameObject.Find("Level 02 Art");
@@ -92,6 +94,8 @@ public static class Level02SceneValidation
         finally { Physics.simulationMode = prior; }
         party.ResetParty(); hud.Bind(party);
         Require(party.EnterChessMode(board), "Existing prefab command starts battle on second scene");
+        Require(board.IsBattleVisible && board.GetComponentsInChildren<Collider>().All(c => c.enabled && c.isTrigger),
+            "Board appears in battle without physical collision");
         Require(party.GetComponent<BattleEnemySpawner>().VisibleCount == 4 && hud.IsShowingBattle,
             "Four enemies and shared HUD appear");
         Require(party.Battle.CellOf(0) == 23 && party.Battle.CellOf(4) == 16,
@@ -105,6 +109,8 @@ public static class Level02SceneValidation
         Require(party.Battle.CellOf(0) == 14 && !party.IsBattleMoving, "Battle movement finishes");
         Capture("Level02Preview");
         party.ExitChessMode();
+        Require(!board.IsBattleVisible && board.GetComponentsInChildren<Renderer>().All(r => !r.enabled),
+            "Board disappears after battle on second scene");
         Require(party.Mode == PartyMode.Chained && party.GetComponent<BattleEnemySpawner>().VisibleCount == 0,
             "Leaving battle restores exploration");
         var start = party.Members[0].Body.position;
