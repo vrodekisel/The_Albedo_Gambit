@@ -32,12 +32,27 @@ namespace AlbedoGambit.Prototype
             if (!IsAiming || party == null || board == null) return false;
             var state = party.Battle;
             actor = party.SelectedIndex;
+            return Fire(actor, targetCell);
+        }
+
+        public bool TryFireEnemy(int participant, int targetCell)
+        {
+            if (party == null || participant < 4 || party.Battle.Side != BattleSide.Enemy || IsProjectileFlying) return false;
+            return Fire(participant, targetCell);
+        }
+
+        private bool Fire(int participant, int targetCell)
+        {
+            var state = party.Battle;
+            actor = participant;
             if (targetCell < 0 || targetCell >= 64 ||
                 (state.AttackTargets(actor) & (1UL << targetCell)) == 0) return false;
             target = targetCell;
             IsAiming = false;
             elapsed = 0;
-            origin = party.Members[actor].transform.position + Vector3.up * 1.25f;
+            var source = actor < 4 ? party.Members[actor].transform
+                : GetComponent<BattleEnemySpawner>().EnemyAt(actor - 4).transform;
+            origin = source.position + Vector3.up * 1.25f;
             destination = board.CellCenter(targetCell % 8, targetCell / 8) + Vector3.up * 1.1f;
             projectile = GameObject.CreatePrimitive(PrimitiveType.Sphere);
             projectile.name = "Ability Projectile";
@@ -46,7 +61,7 @@ namespace AlbedoGambit.Prototype
             projectile.transform.localScale = Vector3.one * .55f;
             var collider = projectile.GetComponent<Collider>();
             if (collider != null) Destroy(collider);
-            var heroVisual = party.Members[actor].transform.Find("Capsule Visual");
+            var heroVisual = source.Find("Capsule Visual");
             projectile.GetComponent<Renderer>().sharedMaterial = heroVisual.GetComponent<Renderer>().sharedMaterial;
             party.Hud?.ShowAbilityFlight();
             return true;
@@ -63,7 +78,10 @@ namespace AlbedoGambit.Prototype
             Destroy(projectile); projectile = null;
             int victim = party.Battle.OccupantAt(target);
             if (party.Battle.TryAttack(actor, target))
-                party.Hud?.ShowAbilityHit(victim, party.Battle.HealthOf(victim), party.Battle.UltimateChargeOf(actor));
+            {
+                if (actor < 4) party.Hud?.ShowAbilityHit(victim, party.Battle.HealthOf(victim), party.Battle.UltimateChargeOf(actor));
+                else party.Hud?.ShowEnemyHit(victim, party.Battle.HealthOf(victim));
+            }
             actor = target = -1;
         }
 

@@ -74,6 +74,7 @@ namespace AlbedoGambit.Prototype
         public void ShowAbilityHit(int enemy, int health, int charge)
         { Notice("Enemy " + (enemy - 3) + ": " + health + " / 100 HP  ·  Ultimate " + charge + " / 3"); }
         public void ShowAbilityFlight() { Notice("Ability in flight"); }
+        public void ShowEnemyHit(int hero, int health) { Notice(heroes[hero].name + ": " + health + " / 100 HP"); }
         private void EndTurn()
         {
             if (party == null) return;

@@ -53,6 +53,8 @@ namespace AlbedoGambit.Prototype
         public void TickMovement(BattleSession state, BoardGrid board, float dt)
         {
             if (!enableMovement || state.Phase != BattlePhase.Battle || state.Side != BattleSide.Enemy) return;
+            var abilities = GetComponent<BattleAbilityController>();
+            if (abilities != null && abilities.IsProjectileFlying) return;
             if (moving >= 0)
             {
                 moveElapsed += Mathf.Max(0, dt);
@@ -68,6 +70,10 @@ namespace AlbedoGambit.Prototype
             wait -= Mathf.Max(0, dt);
             if (wait > 0) return;
             int actor = state.ActingMember;
+            if (state.ActionSpent) { state.CompleteEnemyTurn(); wait = ThinkSeconds; return; }
+            int attackTarget = ChooseAttackTarget(state, actor);
+            if (attackTarget >= 0 && abilities != null && abilities.TryFireEnemy(actor, attackTarget))
+            { wait = .2f; return; }
             int destination = state.MovementSpent ? -1 : BattleEnemyMovement.ChooseDestination(state, actor);
             if (destination >= 0 && state.TryMove(actor, destination))
             {
@@ -83,5 +89,20 @@ namespace AlbedoGambit.Prototype
             foreach (var enemy in instances) if (enemy != null) enemy.gameObject.SetActive(false);
         }
         private void OnDisable() { Hide(); }
+        public static int ChooseAttackTarget(BattleSession state, int actor)
+        {
+            if (state.Side != BattleSide.Enemy || actor != state.ActingMember) return -1;
+            ulong targets = state.AttackTargets(actor);
+            int origin = state.CellOf(actor), best = -1, distance = int.MaxValue;
+            for (int hero = 0; hero < 4; hero++)
+            {
+                int cell = state.CellOf(hero);
+                if (cell < 0 || (targets & (1UL << cell)) == 0) continue;
+                int x = cell % 8 - origin % 8, y = cell / 8 - origin / 8;
+                int score = x * x + y * y;
+                if (score < distance) { best = cell; distance = score; }
+            }
+            return best;
+        }
     }
 }

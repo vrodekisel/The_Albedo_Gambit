@@ -29,6 +29,14 @@ public static class BattleAbilityValidation
     private static void Rules()
     {
         var state = Fixture();
+        var enemyFixture = new BattleSession();
+        enemyFixture.ConfigurePrototype(100, 30);
+        enemyFixture.TryBeginPlacement(ulong.MaxValue, 0, new[] { 10, 12, 63, 62, 27, 0, 7, 56 }, true);
+        enemyFixture.CompletePlacement();
+        Check(BattleEnemySpawner.ChooseAttackTarget(enemyFixture, 4) == 10, "Equal-distance enemy targets prefer A before B");
+        Check(enemyFixture.TryAttack(4, 10) && enemyFixture.HealthOf(0) == 70 && enemyFixture.UltimateChargeOf(4) == 0,
+            "Enemy hit removes 30 without ultimate charge");
+        Check(BattleEnemySpawner.ChooseAttackTarget(enemyFixture, 4) == -1, "Enemy cannot attack twice");
         Check(state.MaxHealth == 100 && state.AttackDamage == 30 && state.HealthOf(4) == 100,
             "100 maximum health and 30 damage");
         Check((state.AttackTargets(0) & (1UL << 28)) != 0, "King may target adjacent enemy");
@@ -92,7 +100,7 @@ public static class BattleAbilityValidation
         Check(party.EnterChessMode(board), "Enter room encounter");
         var state = party.Battle;
         Check(state.MaxHealth == 100 && state.AttackDamage == 30, "Scene combat values");
-        Tick(party, 80);
+        Tick(party, 120);
         bool hit = false;
         for (int turn = 0; turn < 32 && !hit; turn++)
         {
@@ -134,12 +142,12 @@ public static class BattleAbilityValidation
                 Check(hud.manaLabel.text.Contains((charge + 1) + " / 3"), "Profile charge is visible");
                 hit = true;
             }
-            else { party.EndPreviewTurn(); Tick(party, 80); }
+            else { party.EndPreviewTurn(); Tick(party, 120); }
         }
         Check(hit, "A reachable enemy can be attacked in room play mode");
         party.ExitChessMode();
         Check(party.EnterChessMode(board) && state.UltimateChargeOf(0) == 0, "New battle resets charge");
-        Tick(party, 80);
+        Tick(party, 120);
         // Reach another target and verify the second button produces the same hit.
         bool secondHit = false;
         for (int turn = 0; turn < 32 && !secondHit; turn++)
@@ -163,12 +171,21 @@ public static class BattleAbilityValidation
                     "Second ability has same temporary damage and charge");
                 secondHit = true;
             }
-            else { party.EndPreviewTurn(); Tick(party, 80); }
+            else { party.EndPreviewTurn(); Tick(party, 120); }
         }
         Check(secondHit, "Second ability reaches a target in room");
+        int healthBefore = Enumerable.Range(0, 4).Sum(state.HealthOf);
+        for (int turn = 0; turn < 8; turn++)
+        {
+            Check(party.EndPreviewTurn(), "End hero turn for enemy attack");
+            Tick(party, 120);
+            Check(state.Side == BattleSide.Player, "Enemy finishes movement and attack");
+        }
+        Check(Enumerable.Range(0, 4).Sum(state.HealthOf) < healthBefore, "Enemies deal damage in actual room turns");
+        Check(Enumerable.Range(4, 4).All(i => state.UltimateChargeOf(i) == 0), "Enemies do not gain ultimate charge");
         party.ExitChessMode();
         Directory.CreateDirectory("Logs");
-        File.WriteAllText("Logs/BattleAbilityValidation.txt", "PASS: 100 HP, 30 damage, one ability per turn, attack-before-move and move-before-attack, role targeting, real projectile hit, pause, UI charge, reset, and both ability buttons.\nOnly ChessRoomBlockout tested; enemy attacks and ultimate activation remain separate work.\n");
+        File.WriteAllText("Logs/BattleAbilityValidation.txt", "PASS: 100 HP, 30 damage, one ability per turn, attack-before-move and move-before-attack, role targeting, real projectile hit, pause, UI charge, reset, and both ability buttons.\nOnly ChessRoomBlockout tested; enemy attacks verified; ultimate activation remains separate work.\n");
         Debug.Log("BATTLE_ABILITY_SCENE_PASS");
     }
 }
