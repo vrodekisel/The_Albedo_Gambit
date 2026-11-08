@@ -29,6 +29,8 @@ namespace AlbedoGambit.Prototype
         public HeroArt[] heroes;
         private BattlePrototypeController combat;
         private bool wired;
+        private Text endTurnLabel;
+        private string normalEndTurnLabel;
         private string notice = "";
         private float noticeUntil;
         private readonly List<RaycastResult> hits = new List<RaycastResult>();
@@ -45,6 +47,14 @@ namespace AlbedoGambit.Prototype
             if (party != null) party.Hud = this;
             if (!wired)
             {
+                endTurnLabel = endTurnButton.GetComponentInChildren<Text>();
+                if (endTurnLabel != null)
+                {
+                    normalEndTurnLabel = endTurnLabel.text;
+                    endTurnLabel.resizeTextForBestFit = true;
+                    endTurnLabel.resizeTextMinSize = 12;
+                    endTurnLabel.resizeTextMaxSize = endTurnLabel.fontSize;
+                }
                 for (int i = 0; i < 4; i++) { int actor = i; heroButtons[i].onClick.AddListener(() => Inspect(actor)); }
                 for (int i = 0; i < 3; i++) { int slot = i; abilityButtons[i].onClick.AddListener(() => PreviewAbility(slot)); }
                 menuButton.onClick.AddListener(ToggleMenu);
@@ -66,7 +76,7 @@ namespace AlbedoGambit.Prototype
             if (party == null || party.Battle.Phase != BattlePhase.Battle) return;
             if (slot < 2 && party.Battle.OrderedEnemyMovement)
             {
-                if (party.BeginAbility(slot)) Notice("Choose a highlighted enemy");
+                if (party.BeginAbility(slot)) Notice(party.IsAimingAbility ? "Choose a highlighted enemy" : "Выбор способности отменён");
                 return;
             }
             Notice(heroes[party.SelectedIndex].abilities[slot] + " — not implemented yet");
@@ -78,6 +88,14 @@ namespace AlbedoGambit.Prototype
         private void EndTurn()
         {
             if (party == null) return;
+            if (party.Battle.Result != BattleResult.Ongoing)
+            {
+                bool completed = party.Battle.Result == BattleResult.Victory
+                    ? party.ContinueAfterVictory() : party.RetryAfterDefeat();
+                if (completed) { notice = ""; noticeUntil = 0; }
+                Refresh();
+                return;
+            }
             bool ended = combat != null ? combat.EndTurn() : party.EndPreviewTurn();
             if (ended) Notice(party.Battle.OrderedEnemyMovement ? "" : combat == null ? "Next turn — enemy actions are not connected yet" : "Turn ended");
             Refresh();
@@ -123,6 +141,15 @@ namespace AlbedoGambit.Prototype
                 ? "Turn " + state.PlayerTurn + "  ·  " + heroes[state.ActingMember].name + " — hero locked"
                 : !string.IsNullOrEmpty(notice) && Time.unscaledTime < noticeUntil ? notice : "Turn " + state.PlayerTurn + "  ·  click a highlighted cell";
             endTurnButton.interactable = !party.IsBattleMoving && state.Phase == BattlePhase.Battle && state.Side == BattleSide.Player && state.Result == BattleResult.Ongoing;
+            if (endTurnLabel != null)
+                endTurnLabel.text = state.Result == BattleResult.Victory ? "В исследование"
+                    : state.Result == BattleResult.PartyKnockedOut ? "Повторить бой" : normalEndTurnLabel;
+            if (state.Result != BattleResult.Ongoing)
+            {
+                endTurnButton.interactable = !party.IsBattleMoving && state.Phase == BattlePhase.Battle;
+                turnLabel.text = state.Result == BattleResult.Victory ? "Победа" : "Поражение";
+                hint.text = state.Result == BattleResult.Victory ? "Все враги в нокауте" : "Ваша команда в нокауте";
+            }
             float x = 24;
             foreach (int actor in state.OrderedEnemyMovement ? OrderedDisplayOrder : DisplayOrder)
             {
@@ -137,7 +164,7 @@ namespace AlbedoGambit.Prototype
                 abilityIcons[i].sprite = art.icons[i];
                 abilityLabels[i].text = state.OrderedEnemyMovement && i < 2 ? "Orb " + (i + 1) : art.abilities[i];
                 abilityBackgrounds[i].color = art.color;
-                abilityButtons[i].interactable = !party.IsBattleMoving && !paused && state.Phase == BattlePhase.Battle &&
+                abilityButtons[i].interactable = state.Result == BattleResult.Ongoing && !party.IsBattleMoving && !paused && state.Phase == BattlePhase.Battle &&
                     state.Side == BattleSide.Player && (!state.OrderedEnemyMovement && i == 2 || i < 2 && !state.ActionSpent);
             }
         }

@@ -54,7 +54,7 @@ namespace AlbedoGambit.Prototype
         }
         public void TickMovement(BattleSession state, BoardGrid board, float dt)
         {
-            if (!enableMovement || state.Phase != BattlePhase.Battle || state.Side != BattleSide.Enemy) return;
+            if (!enableMovement || state.Phase != BattlePhase.Battle || state.Side != BattleSide.Enemy || state.Result != BattleResult.Ongoing) return;
             var abilities = GetComponent<BattleAbilityController>();
             if (abilities != null && abilities.IsProjectileFlying) return;
             if (moving >= 0)

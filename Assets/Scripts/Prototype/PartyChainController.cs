@@ -411,7 +411,8 @@ namespace AlbedoGambit.Prototype
             var enemies = GetComponent<BattleEnemySpawner>();
             if (enemies != null && !enemies.IsConfigured) { statusMessage = "Не задан префаб противника."; return false; }
             battle.ConfigurePrototype(enemies != null && enemies.MovementEnabled ? 100 : 3,
-                enemies != null && enemies.MovementEnabled ? 30 : 1);
+                enemies != null && enemies.MovementEnabled ? (gameObject.scene.name == "ChessRoomBlockout" ? 40 : 30) : 1,
+                enemies != null && enemies.MovementEnabled && gameObject.scene.name == "ChessRoomBlockout" ? 20 : -1);
             int[] starts = enemies != null && enemies.MovementEnabled ? new[] { 23, 31, 39, 47, 16, 24, 32, 40 }
                 : enemies != null ? new[] { 23, 39, 31, 47, 16, 24, 32, 40 } : new[] { 23, 39, 31, 47 };
             if (!battle.TryBeginPlacement(board.ActiveMask, board.BlockedMask, starts, enemies != null && enemies.MovementEnabled))
@@ -449,6 +450,21 @@ namespace AlbedoGambit.Prototype
                 : "ЛКМ по герою — выбор; по подсвеченной клетке — ход. End Turn — следующий ход.";
             UpdateSelection();
             return true;
+        }
+
+        public bool ContinueAfterVictory()
+        {
+            if (battle.Phase != BattlePhase.Battle || battle.Result != BattleResult.Victory || IsBattleMoving) return false;
+            ExitChessMode();
+            return mode != PartyMode.Chess;
+        }
+
+        public bool RetryAfterDefeat()
+        {
+            if (battle.Phase != BattlePhase.Battle || battle.Result != BattleResult.PartyKnockedOut || IsBattleMoving || battleBoard == null) return false;
+            var board = battleBoard;
+            ExitChessMode();
+            return EnterChessMode(board);
         }
 
         public void ExitChessMode()

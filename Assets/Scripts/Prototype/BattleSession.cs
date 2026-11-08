@@ -31,6 +31,7 @@ namespace AlbedoGambit.Prototype
         public bool ActionSpent { get; private set; }
         public int MaxHealth { get; private set; } = 3;
         public int AttackDamage { get; private set; } = 1;
+        public int EnemyAttackDamage { get; private set; } = 1;
 
         public BattleSession() { Reset(); }
 
@@ -55,11 +56,12 @@ namespace AlbedoGambit.Prototype
             }
         }
         public bool SameTeam(int a, int b) => (a < 4) == (b < 4);
-        public void ConfigurePrototype(int maxHealth, int damage)
+        public void ConfigurePrototype(int maxHealth, int damage, int enemyDamage = -1)
         {
             if (Phase != BattlePhase.Exploration && Phase != BattlePhase.Cutscene)
                 throw new InvalidOperationException("Configure outside an encounter.");
             MaxHealth = Math.Max(1, maxHealth); AttackDamage = Math.Max(1, damage);
+            EnemyAttackDamage = enemyDamage < 0 ? AttackDamage : Math.Max(1, enemyDamage);
         }
 
         // Validate the whole placement before changing any state. No half-placed party on failure.
@@ -231,11 +233,10 @@ namespace AlbedoGambit.Prototype
             ActingMember = member;
             if (member < 4) SelectedMember = member;
             int target = OccupantAt(targetCell);
-            health[target] = Math.Max(0, health[target] - AttackDamage);
+            health[target] = Math.Max(0, health[target] - (member < 4 ? AttackDamage : EnemyAttackDamage));
             if (member < 4) ultimateCharge[member] = Math.Min(3, ultimateCharge[member] + 1);
             ActionSpent = true;
-            // Encounter completion and knockout presentation belong to a later block.
-            if (!OrderedEnemyMovement) UpdateResult();
+            UpdateResult();
             return true;
         }
         private void UpdateResult()
@@ -256,6 +257,9 @@ namespace AlbedoGambit.Prototype
         }
         private void BeginEnemyTurn()
         {
+            UpdateResult();
+            if (Result != BattleResult.Ongoing) return;
+            ActingMember = -1;
             Side = BattleSide.Enemy;
             for (int i = 0; i < ParticipantCount - 4; i++)
             {
@@ -267,11 +271,19 @@ namespace AlbedoGambit.Prototype
         public bool CompleteEnemyTurn()
         {
             if (Phase != BattlePhase.Battle || Side != BattleSide.Enemy || Result != BattleResult.Ongoing) return false;
+            UpdateResult();
+            if (Result != BattleResult.Ongoing) return false;
             Side = BattleSide.Player; ActingMember = -1;
             if (OrderedEnemyMovement)
             {
-                SelectedMember = nextPlayerSlot;
-                nextPlayerSlot = (nextPlayerSlot + 1) % 4;
+                for (int i = 0; i < 4; i++)
+                {
+                    int candidate = (nextPlayerSlot + i) % 4;
+                    if (IsKnockedOut(candidate)) continue;
+                    SelectedMember = candidate;
+                    nextPlayerSlot = (candidate + 1) % 4;
+                    break;
+                }
             }
             MovementSpent = ActionSpent = false; PlayerTurn++; return true;
         }

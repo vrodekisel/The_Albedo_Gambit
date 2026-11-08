@@ -13,6 +13,7 @@ namespace AlbedoGambit.Prototype
         private int actor = -1, target = -1;
         private const float FlightSeconds = .45f;
         public bool IsAiming { get; private set; }
+        private int aimingSlot = -1;
         public bool IsProjectileFlying => projectile != null;
 
         public void Bind(PartyChainController controller, BoardGrid grid)
@@ -23,6 +24,8 @@ namespace AlbedoGambit.Prototype
             if (slot < 0 || slot > 1 || party == null || party.IsBattleMoving) return false;
             var state = party.Battle;
             if (!state.OrderedEnemyMovement || !state.CanAct(party.SelectedIndex) || state.ActionSpent) return false;
+            if (IsAiming && aimingSlot == slot) { Cancel(); return true; }
+            aimingSlot = slot;
             IsAiming = true;
             return true;
         }
@@ -49,6 +52,7 @@ namespace AlbedoGambit.Prototype
                 (state.AttackTargets(actor) & (1UL << targetCell)) == 0) return false;
             target = targetCell;
             IsAiming = false;
+            aimingSlot = -1;
             elapsed = 0;
             var source = actor < 4 ? party.Members[actor].transform
                 : GetComponent<BattleEnemySpawner>().EnemyAt(actor - 4).transform;
@@ -88,6 +92,7 @@ namespace AlbedoGambit.Prototype
         public void Cancel()
         {
             IsAiming = false;
+            aimingSlot = -1;
             if (projectile != null) Destroy(projectile);
             projectile = null; actor = target = -1; elapsed = 0;
         }

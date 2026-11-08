@@ -99,7 +99,7 @@ public static class BattleAbilityValidation
         party.Initialize(); hud.Bind(party); party.ResetParty();
         Check(party.EnterChessMode(board), "Enter room encounter");
         var state = party.Battle;
-        Check(state.MaxHealth == 100 && state.AttackDamage == 30, "Scene combat values");
+        Check(state.MaxHealth == 100 && state.AttackDamage == 40 && state.EnemyAttackDamage == 20, "Scene combat values");
         Tick(party, 120);
         bool hit = false;
         for (int turn = 0; turn < 32 && !hit; turn++)
@@ -118,6 +118,9 @@ public static class BattleAbilityValidation
                 int victim = state.OccupantAt(target), before = state.HealthOf(victim);
                 int charge = state.UltimateChargeOf(hero);
                 hud.abilityButtons[0].onClick.Invoke();
+                hud.abilityButtons[0].onClick.Invoke();
+                Check(!party.IsAimingAbility && !state.ActionSpent, "Repeated ability click cancels without spending action");
+                hud.abilityButtons[0].onClick.Invoke();
                 Check(party.IsAimingAbility && (party.AvailableAttackTargets & (1UL << target)) != 0,
                     "First ability enters targeting mode");
                 Check(!party.TryUseAbilityOn(state.CellOf(hero)) && state.HealthOf(victim) == before,
@@ -134,7 +137,7 @@ public static class BattleAbilityValidation
                 party.TogglePause(); Tick(party, 30);
                 Check(projectile.position == position && state.HealthOf(victim) == before, "Pause freezes projectile and damage");
                 party.TogglePause(); Tick(party, 20);
-                Check(state.HealthOf(victim) == before - 30 && state.UltimateChargeOf(hero) == charge + 1 && state.ActionSpent,
+                Check(state.HealthOf(victim) == Math.Max(0, before - state.AttackDamage) && state.UltimateChargeOf(hero) == charge + 1 && state.ActionSpent,
                     "Projectile hit applies damage and charge once");
                 Check(!party.BeginAbility(1) && !party.GetComponent<BattleBoardView>().ClickCell(target),
                     "Second ability cannot be used in same turn");
@@ -167,7 +170,7 @@ public static class BattleAbilityValidation
                 Check(party.IsAimingAbility && !state.ActionSpent, "Second button selects targeting mode");
                 Check(party.GetComponent<BattleBoardView>().ClickCell(target), "Second ability fires");
                 Tick(party, 25);
-                Check(state.HealthOf(victim) == before - 30 && state.UltimateChargeOf(hero) == 1,
+                Check(state.HealthOf(victim) == Math.Max(0, before - state.AttackDamage) && state.UltimateChargeOf(hero) == 1,
                     "Second ability has same temporary damage and charge");
                 secondHit = true;
             }
