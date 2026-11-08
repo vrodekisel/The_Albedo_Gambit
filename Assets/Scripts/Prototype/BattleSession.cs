@@ -34,6 +34,23 @@ namespace AlbedoGambit.Prototype
 
         public BattleSession() { Reset(); }
 
+#if UNITY_EDITOR
+        // Temporary fixture, never available in a player build. Apply before showing views.
+        public bool PrepareLastEnemyKnockoutTest()
+        {
+            if (Phase != BattlePhase.Battle || !OrderedEnemyMovement || ParticipantCount != 8) return false;
+            int destination = 30; // G4, beside Mia at H4.
+            if (CellOf(1) != 31 || IsBlocked(destination) || OccupantAt(destination) >= 0) return false;
+            occupants[memberCells[4]] = -1;
+            memberCells[4] = destination; occupants[destination] = 4;
+            health[4] = AttackDamage;
+            for (int i = 5; i < 8; i++) health[i] = 0;
+            Side = BattleSide.Player; SelectedMember = 1; ActingMember = -1;
+            nextPlayerSlot = 2; MovementSpent = ActionSpent = false;
+            return true;
+        }
+#endif
+
         public bool HasCell(int cell) => cell >= 0 && cell < 64 && (activeCells & (1UL << cell)) != 0;
         public bool IsBlocked(int cell) => !HasCell(cell) || (blockedCells & (1UL << cell)) != 0;
         public int OccupantAt(int cell) => HasCell(cell) ? occupants[cell] : -1;

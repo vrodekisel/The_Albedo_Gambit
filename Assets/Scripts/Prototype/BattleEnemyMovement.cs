@@ -4,7 +4,7 @@ namespace AlbedoGambit.Prototype
     // abilities exist; adaptation/history and composite-action search are deferred.
     public static class BattleEnemyMovement
     {
-        public static int ChooseDestination(BattleSession state, int actor)
+        public static int ChooseDestination(BattleSession state, int actor, bool useSecondChoice = false)
         {
             if (state.Side != BattleSide.Enemy || actor != state.ActingMember) return -1;
             ulong legal = state.MoveTargets(actor);
@@ -18,15 +18,21 @@ namespace AlbedoGambit.Prototype
             }
             if (target < 0) return -1;
             int best = -1, bestDistance = int.MaxValue, bestTravel = int.MaxValue;
+            int second = -1, secondDistance = int.MaxValue, secondTravel = int.MaxValue;
             for (int cell = 0; cell < 64; cell++)
             {
                 if ((legal & (1UL << cell)) == 0) continue;
                 int distance = DistanceSquared(cell, target), travel = DistanceSquared(origin, cell);
                 // Deterministic ties: shorter movement, then lower cell index.
                 if (distance < bestDistance || distance == bestDistance && travel < bestTravel)
-                { best = cell; bestDistance = distance; bestTravel = travel; }
+                {
+                    second = best; secondDistance = bestDistance; secondTravel = bestTravel;
+                    best = cell; bestDistance = distance; bestTravel = travel;
+                }
+                else if (distance < secondDistance || distance == secondDistance && travel < secondTravel)
+                { second = cell; secondDistance = distance; secondTravel = travel; }
             }
-            return best;
+            return useSecondChoice && second >= 0 ? second : best;
         }
         private static int DistanceSquared(int a, int b)
         {

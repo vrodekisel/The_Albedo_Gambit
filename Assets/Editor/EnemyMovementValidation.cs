@@ -59,6 +59,11 @@ public static class EnemyMovementValidation
         state = Fixture();
         int target = BattleEnemyMovement.ChooseDestination(state, 4);
         Check(target == 17, "Move closes distance to nearest hero with deterministic tie break");
+        Check(BattleEnemyMovement.ChooseDestination(state, 4, true) == 33, "Second-ranked knight destination");
+        var single = Fixture(Mask(10, 12, 21, 33, 37, 42, 44));
+        Check(BattleEnemyMovement.ChooseDestination(single, 4, true) == 17, "Single legal choice falls back to best");
+        var trapped = Fixture(Mask(10, 12, 17, 21, 33, 37, 42, 44));
+        Check(BattleEnemyMovement.ChooseDestination(trapped, 4, true) == -1, "No second choice when trapped");
         Check(state.TryMove(4, target) && !state.TryMove(4, 27), "Only one movement");
         Check(state.OccupantAt(27) == -1 && state.OccupantAt(target) == 4, "Atomic occupancy transfer");
         int[] order = { 0, 1, 2, 3 };

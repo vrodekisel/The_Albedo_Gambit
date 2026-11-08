@@ -10,6 +10,9 @@ namespace AlbedoGambit.Prototype
         [SerializeField] private BattleEnemyView enemyPrefab;
         [Tooltip("Opt-in scene milestone: mirrored roles, enemy first, fixed alternating queues.")]
         [SerializeField] private bool enableMovement;
+        [Tooltip("ChessRoomBlockout only: probability of choosing the second-ranked legal movement.")]
+        [SerializeField, Range(0f, 1f)] private float roomSecondChoiceChance = .3f;
+        public float RoomSecondChoiceChance { get => roomSecondChoiceChance; set => roomSecondChoiceChance = Mathf.Clamp01(value); }
         private float wait, moveElapsed;
         private int moving = -1;
         private Vector3 moveFrom, moveTo;
@@ -76,7 +79,9 @@ namespace AlbedoGambit.Prototype
             int attackTarget = ChooseAttackTarget(state, actor);
             if (attackTarget >= 0 && abilities != null && abilities.TryFireEnemy(actor, attackTarget))
             { wait = .2f; return; }
-            int destination = state.MovementSpent ? -1 : BattleEnemyMovement.ChooseDestination(state, actor);
+            bool secondChoice = !state.MovementSpent && gameObject.scene.name == "ChessRoomBlockout"
+                && Random.value < roomSecondChoiceChance;
+            int destination = state.MovementSpent ? -1 : BattleEnemyMovement.ChooseDestination(state, actor, secondChoice);
             if (destination >= 0 && state.TryMove(actor, destination))
             {
                 moving = actor; moveElapsed = 0;
