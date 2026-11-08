@@ -74,6 +74,13 @@ namespace AlbedoGambit.Prototype
             }
             wait -= Mathf.Max(0, dt);
             if (wait > 0) return;
+            if (GetComponent<BattleAutoPlay>()?.ScriptedEnemyPasses == true)
+            {
+                bool alive = false;
+                for (int i = 4; i < state.ParticipantCount; i++) alive |= state.HealthOf(i) > 0;
+                if (alive) state.CompleteEnemyTurn();
+                wait = ThinkSeconds; return;
+            }
             int actor = state.ActingMember;
             if (state.ActionSpent) { state.CompleteEnemyTurn(); wait = ThinkSeconds; return; }
             int attackTarget = ChooseAttackTarget(state, actor);

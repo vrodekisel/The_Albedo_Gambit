@@ -1,5 +1,9 @@
 # Temporary room auto battle
 
+The temporary panel displays a centered Russian victory/defeat banner whenever an entire team reaches zero HP, including manual play. It is derived from current health, clears with a fresh battle, and is only a test result display, not the full production encounter-exit flow.
+
+`Play enemy team knockout test` (Editor only) resets the battle and places all four enemies at 100 HP within attack range. Heroes automatically fire ordinary 30-damage projectiles without moving; enemies deliberately pass. The driver stops with `All enemies down`. `Stop knockout playback` stops hero automation; enemies remain passive in this fixture. Exit and reenter battle to restore normal enemy behavior. This scripted test checks knockout through ordinary attacks, not balance or a completed victory screen. A direct simulation verified all four enemies reach zero after 16 legal attacks while heroes retain 100 HP. Visual playback still needs checking in Unity.
+
 ## Last enemy knockout fixture (Editor only)
 
 During battle click `Load last enemy KO test (resets battle)`. This replaces the current encounter with the usual room formation, moves enemy 4 to G4 with 30 HP, sets enemies 5–7 to zero HP and gives Mia the turn at H4. Select either ordinary ability and click the enemy at G4. The projectile uses the normal attack path. The panel reports `All enemies down` after impact; the game victory screen is still separate unfinished work. This checks logical knockout; the existing enemy view has no dedicated knockout animation. Exit Play Mode to discard the fixture state. The fixture button and session setup are excluded from player builds.

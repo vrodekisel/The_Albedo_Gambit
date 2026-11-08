@@ -35,6 +35,20 @@ namespace AlbedoGambit.Prototype
         public BattleSession() { Reset(); }
 
 #if UNITY_EDITOR
+        public bool PrepareEnemyTeamKnockoutTest()
+        {
+            if (Phase != BattlePhase.Battle || !OrderedEnemyMovement || ParticipantCount != 8) return false;
+            int[] cells = { 22, 30, 46, 37 }; // Each hero can hit one enemy without moving.
+            for (int i = 0; i < 4; i++)
+                if (IsBlocked(cells[i]) || OccupantAt(cells[i]) >= 0) return false;
+            for (int i = 4; i < 8; i++) occupants[memberCells[i]] = -1;
+            for (int i = 4; i < 8; i++)
+            { memberCells[i] = cells[i - 4]; occupants[cells[i - 4]] = i; health[i] = MaxHealth; }
+            Side = BattleSide.Player; SelectedMember = 0; ActingMember = -1;
+            nextPlayerSlot = 1; MovementSpent = ActionSpent = false;
+            return true;
+        }
+
         // Temporary fixture, never available in a player build. Apply before showing views.
         public bool PrepareLastEnemyKnockoutTest()
         {
