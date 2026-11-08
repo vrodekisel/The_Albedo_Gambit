@@ -28,6 +28,8 @@ namespace AlbedoGambit.Prototype
             if (!IsConfigured || state.Phase != BattlePhase.Battle || state.ParticipantCount != 8) return;
             moving = -1; wait = ThinkSeconds;
             var party = GetComponent<PartyChainController>();
+            if (enableMovement && gameObject.scene.name == "ChessRoomBlockout" && GetComponent<BattleAutoPlay>() == null)
+                gameObject.AddComponent<BattleAutoPlay>();
             for (int i = 0; i < 4; i++)
             {
                 if (instances[i] == null)
