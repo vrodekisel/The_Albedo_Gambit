@@ -65,10 +65,11 @@ namespace AlbedoGambit.Prototype
         }
 
         // Validate the whole placement before changing any state. No half-placed party on failure.
-        public bool TryBeginPlacement(ulong active, ulong blocked, int[] starts, bool orderedEnemyMovement = false)
+        public bool TryBeginPlacement(ulong active, ulong blocked, int[] starts, bool orderedEnemyMovement = false, int[] partyHealth = null)
         {
             if (Phase != BattlePhase.Exploration && Phase != BattlePhase.Cutscene) return false;
             if (starts == null || (starts.Length != 4 && starts.Length != 8)) return false;
+            if (partyHealth != null && partyHealth.Length != 4) return false;
             ulong used = 0;
             for (int i = 0; i < starts.Length; i++)
             {
@@ -88,7 +89,7 @@ namespace AlbedoGambit.Prototype
             {
                 memberCells[i] = starts[i];
                 occupants[starts[i]] = i;
-                health[i] = MaxHealth;
+                health[i] = i < 4 && partyHealth != null ? Math.Max(0, Math.Min(MaxHealth, partyHealth[i])) : MaxHealth;
                 ultimateCharge[i] = 0;
             }
             SelectedMember = 0;

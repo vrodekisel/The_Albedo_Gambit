@@ -415,7 +415,7 @@ namespace AlbedoGambit.Prototype
                 enemies != null && enemies.MovementEnabled && gameObject.scene.name == "ChessRoomBlockout" ? SelectedEnemyDamage : -1);
             int[] starts = enemies != null && enemies.MovementEnabled ? new[] { 23, 31, 39, 47, 16, 24, 32, 40 }
                 : enemies != null ? new[] { 23, 39, 31, 47, 16, 24, 32, 40 } : new[] { 23, 39, 31, 47 };
-            if (!battle.TryBeginPlacement(board.ActiveMask, board.BlockedMask, starts, enemies != null && enemies.MovementEnabled))
+            if (!battle.TryBeginPlacement(board.ActiveMask, board.BlockedMask, starts, enemies != null && enemies.MovementEnabled, explorationHealth))
             {
                 statusMessage = "Не удалось начать расстановку: проверь клетки H3–H6, A3–A6 и текущий режим.";
                 return false;
@@ -452,6 +452,8 @@ namespace AlbedoGambit.Prototype
             return true;
         }
 
+        private int[] explorationHealth;
+
         public bool ContinueAfterVictory()
         {
             if (battle.Phase != BattlePhase.Battle || battle.Result != BattleResult.Victory || IsBattleMoving) return false;
@@ -463,6 +465,7 @@ namespace AlbedoGambit.Prototype
         {
             if (battle.Phase != BattlePhase.Battle || battle.Result != BattleResult.PartyKnockedOut || IsBattleMoving || battleBoard == null) return false;
             var board = battleBoard;
+            explorationHealth = null;
             ExitChessMode();
             return EnterChessMode(board);
         }
@@ -470,6 +473,12 @@ namespace AlbedoGambit.Prototype
         public void ExitChessMode()
         {
             if (mode != PartyMode.Chess || battle.Phase != BattlePhase.Battle) return;
+            if (battle.Result == BattleResult.Victory && gameObject.scene.name == "ChessRoomBlockout")
+            {
+                explorationHealth = new int[4];
+                for (int hero = 0; hero < explorationHealth.Length; hero++)
+                    explorationHealth[hero] = battle.HealthOf(hero);
+            }
             movingMember = -1;
             if (abilityController != null) abilityController.Cancel();
             if (battleBoard != null) battleBoard.SetBattleVisible(false);
@@ -585,6 +594,7 @@ namespace AlbedoGambit.Prototype
 
         public void ResetParty()
         {
+            explorationHealth = null;
             if (!initialized) return;
             movingMember = -1;
             if (abilityController != null) abilityController.Cancel();
