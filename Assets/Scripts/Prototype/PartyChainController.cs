@@ -412,7 +412,7 @@ namespace AlbedoGambit.Prototype
             if (enemies != null && !enemies.IsConfigured) { statusMessage = "Не задан префаб противника."; return false; }
             battle.ConfigurePrototype(enemies != null && enemies.MovementEnabled ? 100 : 3,
                 enemies != null && enemies.MovementEnabled ? (gameObject.scene.name == "ChessRoomBlockout" ? 40 : 30) : 1,
-                enemies != null && enemies.MovementEnabled && gameObject.scene.name == "ChessRoomBlockout" ? 20 : -1);
+                enemies != null && enemies.MovementEnabled && gameObject.scene.name == "ChessRoomBlockout" ? SelectedEnemyDamage : -1);
             int[] starts = enemies != null && enemies.MovementEnabled ? new[] { 23, 31, 39, 47, 16, 24, 32, 40 }
                 : enemies != null ? new[] { 23, 39, 31, 47, 16, 24, 32, 40 } : new[] { 23, 39, 31, 47 };
             if (!battle.TryBeginPlacement(board.ActiveMask, board.BlockedMask, starts, enemies != null && enemies.MovementEnabled))
@@ -492,6 +492,11 @@ namespace AlbedoGambit.Prototype
                 if (selectionRings[i] != null) selectionRings[i].gameObject.SetActive(i == selected);
         }
 
+        private static readonly string[] DifficultyNames = { "Лёгкая", "Обычная", "Сложная" };
+        private static readonly int[] EnemyDamageByDifficulty = { 10, 20, 30 };
+        private int difficultyIndex = 1;
+        private int SelectedEnemyDamage => EnemyDamageByDifficulty[difficultyIndex];
+
         private void OnGUI()
         {
             if (Hud != null && Hud.IsShowingBattle) return;
@@ -509,6 +514,12 @@ namespace AlbedoGambit.Prototype
                 "WASD / стрелки — идти   Пробел — прыжок   G — разделить / собрать\n" +
                 "1–4 — персонаж   T — тест режима   R — на старт   Esc — пауза\n" +
                 statusMessage, style);
+            if (battle.Phase == BattlePhase.Exploration && gameObject.scene.name == "ChessRoomBlockout")
+            {
+                float width = Mathf.Min(420, Screen.width - 24);
+                GUI.Box(new Rect(12, 116, width, 72), $"Сложность боя · урон врага {SelectedEnemyDamage}");
+                difficultyIndex = GUI.Toolbar(new Rect(20, 146, width - 16, 32), difficultyIndex, DifficultyNames);
+            }
         }
 
         private void RecordLeader(bool force)
