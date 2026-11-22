@@ -53,7 +53,9 @@ namespace AlbedoGambit.Prototype
         public bool IsBattleMoving => movingMember >= 0 || abilityController != null && abilityController.IsProjectileFlying;
         public ulong AvailableMoves => IsBattleMoving ? 0 : battle.MoveTargets(selected);
         public ulong AvailableAttackTargets => abilityController != null && abilityController.IsAiming && !IsBattleMoving
-            ? battle.AttackTargets(selected) : 0;
+            ? abilityController.Targets : 0;
+        public bool ChoosingFusionEnemy => abilityController != null && abilityController.ChoosingFusionEnemy;
+        public bool ChoosingFusionPartner => abilityController != null && abilityController.ChoosingPartner;
         public bool IsAimingAbility => abilityController != null && abilityController.IsAiming;
         public bool BeginAbility(int slot) => abilityController != null && abilityController.BeginAim(slot);
         public bool TryUseAbilityOn(int cell) => abilityController != null && abilityController.TryFire(cell);
@@ -133,6 +135,12 @@ namespace AlbedoGambit.Prototype
             if (keyboard.digit2Key.wasPressedThisFrame) SelectMember(1);
             if (keyboard.digit3Key.wasPressedThisFrame) SelectMember(2);
             if (keyboard.digit4Key.wasPressedThisFrame) SelectMember(3);
+            if (keyboard.yKey.wasPressedThisFrame && gameObject.scene.name == "ChessRoomBlockout")
+            {
+                if (battle.IsTraining) ExitChessMode();
+                else if (mode != PartyMode.Chess) EnterChessMode(FindFirstObjectByType<BoardGrid>(), true);
+                return;
+            }
             if (keyboard.tKey.wasPressedThisFrame)
             {
                 if (mode == PartyMode.Chess) ExitChessMode();
@@ -240,7 +248,7 @@ namespace AlbedoGambit.Prototype
             if (remove > 0) path.RemoveRange(0, remove);
             jumps.RemoveAll(p => p.consumedMask == 15);
             // A blocked companion can lag behind without accumulating an unlimited route.
-            if (path.Count > 12000) { BeginRegroup(); statusMessage = "Длинный маршрут: сбор к A"; }
+            if (path.Count > 12000) { BeginRegroup(); statusMessage = "Long route: regrouping at A"; }
         }
 
         private Vector3 Navigate(int index, Vector3 target, float speed)
@@ -364,7 +372,7 @@ namespace AlbedoGambit.Prototype
             if (battle.Phase != BattlePhase.Exploration) return;
             if (mode == PartyMode.Chess) return;
             if (mode == PartyMode.Chained || mode == PartyMode.Regrouping)
-            { mode = PartyMode.Separated; jumps.Clear(); ClearRoutes(); statusMessage = "Выбери персонажа клавишами 1–4"; }
+            { mode = PartyMode.Separated; jumps.Clear(); ClearRoutes(); statusMessage = "Select a character with 1-4"; }
             else BeginRegroup();
             jumpInput = false;
         }
@@ -397,27 +405,31 @@ namespace AlbedoGambit.Prototype
             if (!found)
             {
                 mode = PartyMode.Separated;
-                statusMessage = "Недостаточно места у A. Отойди на свободное место и нажми G.";
+                statusMessage = "Not enough room near A. Move to open ground and press G.";
             }
-            else statusMessage = "Сбор к A — можно отменить клавишей G";
+            else statusMessage = "Regrouping at A. Press G to cancel.";
         }
 
         // Future cutscenes call this method; T is only the prototype/debug trigger.
-        public bool EnterChessMode(BoardGrid board)
+        public bool EnterChessMode(BoardGrid board) => EnterChessMode(board, false);
+
+        private bool EnterChessMode(BoardGrid board, bool training)
         {
             Initialize();
             if (!initialized || board == null || mode == PartyMode.Chess) return false;
             // Opposite board edges are an explicit debug fixture, not the future placement solver.
             var enemies = GetComponent<BattleEnemySpawner>();
-            if (enemies != null && !enemies.IsConfigured) { statusMessage = "Не задан префаб противника."; return false; }
+            if (training && (enemies == null || !enemies.MovementEnabled)) return false;
+            if (enemies != null && !enemies.IsConfigured) { statusMessage = "Enemy prefab missing."; return false; }
             battle.ConfigurePrototype(enemies != null && enemies.MovementEnabled ? 100 : 3,
                 enemies != null && enemies.MovementEnabled ? (gameObject.scene.name == "ChessRoomBlockout" ? 40 : 30) : 1,
                 enemies != null && enemies.MovementEnabled && gameObject.scene.name == "ChessRoomBlockout" ? SelectedEnemyDamage : -1);
-            int[] starts = enemies != null && enemies.MovementEnabled ? new[] { 23, 31, 39, 47, 16, 24, 32, 40 }
+            int[] starts = training ? new[] { 9, 25, 15, 47, 13, 29, 43, 61 }
+                : enemies != null && enemies.MovementEnabled ? new[] { 23, 31, 39, 47, 16, 24, 32, 40 }
                 : enemies != null ? new[] { 23, 39, 31, 47, 16, 24, 32, 40 } : new[] { 23, 39, 31, 47 };
-            if (!battle.TryBeginPlacement(board.ActiveMask, board.BlockedMask, starts, enemies != null && enemies.MovementEnabled, explorationHealth))
+            if (!battle.TryBeginPlacement(board.ActiveMask, board.BlockedMask, starts, enemies != null && enemies.MovementEnabled, training ? null : explorationHealth, training))
             {
-                statusMessage = "Не удалось начать расстановку: проверь клетки H3–H6, A3–A6 и текущий режим.";
+                statusMessage = "Placement failed. Check the starting cells.";
                 return false;
             }
             explorationMode = mode == PartyMode.Regrouping ? PartyMode.Separated : mode;
@@ -429,7 +441,7 @@ namespace AlbedoGambit.Prototype
                 explorationPositions[i] = members[i].Body.position;
                 explorationRotations[i] = members[i].Body.rotation;
                 members[i].Body.isKinematic = false;
-                members[i].ResetTo(board.CellCenter(7, 2 + CurrentFormationSlot(i)) + Vector3.up * .015f, Quaternion.identity);
+                members[i].ResetTo(board.CellCenter(starts[i] % 8, starts[i] / 8) + Vector3.up * .015f, Quaternion.identity);
                 members[i].Body.isKinematic = true;
             }
             Physics.SyncTransforms();
@@ -446,8 +458,8 @@ namespace AlbedoGambit.Prototype
             if (battleView == null) battleView = gameObject.AddComponent<BattleBoardView>();
             battleView.Bind(this, board);
             statusMessage = battle.OrderedEnemyMovement
-                ? "Герои ходят по очереди. ЛКМ по подсвеченной клетке — ход. End Turn — завершить ход героя."
-                : "ЛКМ по герою — выбор; по подсвеченной клетке — ход. End Turn — следующий ход.";
+                ? "Click a highlighted cell to move. End Turn advances the queue."
+                : "Click a hero to select, then a highlighted cell to move.";
             UpdateSelection();
             return true;
         }
@@ -465,15 +477,16 @@ namespace AlbedoGambit.Prototype
         {
             if (battle.Phase != BattlePhase.Battle || battle.Result != BattleResult.PartyKnockedOut || IsBattleMoving || battleBoard == null) return false;
             var board = battleBoard;
-            explorationHealth = null;
+            bool training = battle.IsTraining;
+            if (!training) explorationHealth = null;
             ExitChessMode();
-            return EnterChessMode(board);
+            return EnterChessMode(board, training);
         }
 
         public void ExitChessMode()
         {
             if (mode != PartyMode.Chess || battle.Phase != BattlePhase.Battle) return;
-            if (battle.Result == BattleResult.Victory && gameObject.scene.name == "ChessRoomBlockout")
+            if (!battle.IsTraining && battle.Result == BattleResult.Victory && gameObject.scene.name == "ChessRoomBlockout")
             {
                 explorationHealth = new int[4];
                 for (int hero = 0; hero < explorationHealth.Length; hero++)
@@ -501,7 +514,7 @@ namespace AlbedoGambit.Prototype
                 if (selectionRings[i] != null) selectionRings[i].gameObject.SetActive(i == selected);
         }
 
-        private static readonly string[] DifficultyNames = { "Лёгкая", "Обычная", "Сложная" };
+        private static readonly string[] DifficultyNames = { "Easy", "Normal", "Hard" };
         private static readonly int[] EnemyDamageByDifficulty = { 10, 20, 30 };
         private int difficultyIndex = 1;
         private int SelectedEnemyDamage => EnemyDamageByDifficulty[difficultyIndex];
@@ -511,22 +524,22 @@ namespace AlbedoGambit.Prototype
             if (Hud != null && Hud.IsShowingBattle) return;
             if (battle.Phase == BattlePhase.Paused)
             {
-                GUI.Box(new Rect(Screen.width / 2f - 140, Screen.height / 2f - 40, 280, 80), "Пауза");
-                GUI.Label(new Rect(Screen.width / 2f - 115, Screen.height / 2f, 250, 30), "Esc — продолжить");
+                GUI.Box(new Rect(Screen.width / 2f - 140, Screen.height / 2f - 40, 280, 80), "Paused");
+                GUI.Label(new Rect(Screen.width / 2f - 115, Screen.height / 2f, 250, 30), "Esc - resume");
                 return;
             }
-            string label = mode == PartyMode.Chained ? "Цепочка" : mode == PartyMode.Separated ? "Отряд разделён" :
-                mode == PartyMode.Regrouping ? "Сбор к A" : "Шахматный режим (тест)";
+            string label = mode == PartyMode.Chained ? "Party chain" : mode == PartyMode.Separated ? "Separated" :
+                mode == PartyMode.Regrouping ? "Regrouping" : "Board mode";
             GUI.Box(new Rect(12, 12, 670, 98), "");
             var style = new GUIStyle(GUI.skin.label) { fontSize = 15, wordWrap = true };
-            GUI.Label(new Rect(24, 18, 645, 88), $"{label}  |  Выбран: {(char)('A' + selected)}\n" +
-                "WASD / стрелки — идти   Пробел — прыжок   G — разделить / собрать\n" +
-                "1–4 — персонаж   T — тест режима   R — на старт   Esc — пауза\n" +
+            GUI.Label(new Rect(24, 18, 645, 88), $"{label}  |  Selected: {(char)('A' + selected)}\n" +
+                "WASD / arrows - move   Space - jump   G - split / regroup\n" +
+                "1-4 - select   T - battle   Y - training   R - reset   Esc - pause\n" +
                 statusMessage, style);
             if (battle.Phase == BattlePhase.Exploration && gameObject.scene.name == "ChessRoomBlockout")
             {
                 float width = Mathf.Min(420, Screen.width - 24);
-                GUI.Box(new Rect(12, 116, width, 72), $"Сложность боя · урон врага {SelectedEnemyDamage}");
+                GUI.Box(new Rect(12, 116, width, 72), $"Difficulty - enemy damage {SelectedEnemyDamage}");
                 difficultyIndex = GUI.Toolbar(new Rect(20, 146, width - 16, 32), difficultyIndex, DifficultyNames);
             }
         }

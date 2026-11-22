@@ -16,7 +16,7 @@ namespace AlbedoGambit.Prototype
             if (party == null) return;
             var s = party.Battle;
             if (s.Phase == BattlePhase.Paused) return;
-            if (s.Phase != BattlePhase.Battle) { mode = 0; notice = ""; return; }
+            if (s.IsTraining || s.Phase != BattlePhase.Battle) { mode = 0; notice = ""; return; }
             if (mode == 0 || party.IsBattleMoving) return;
             bool heroes = false, enemies = false;
             for (int i = 0; i < s.ParticipantCount; i++)
@@ -59,6 +59,7 @@ namespace AlbedoGambit.Prototype
 
         private void OnGUI()
         {
+            if (party != null && party.Battle.IsTraining) return;
             if (party == null || party.Battle.Phase != BattlePhase.Battle && party.Battle.Phase != BattlePhase.Paused) return;
             GUILayout.BeginArea(new Rect(12, 12, 270, 155), GUI.skin.box);
             GUILayout.Label("TEMP: battle testing");

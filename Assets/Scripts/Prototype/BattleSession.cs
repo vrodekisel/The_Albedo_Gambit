@@ -14,9 +14,12 @@ namespace AlbedoGambit.Prototype
         private readonly int[] memberCells = new int[8];
         private readonly int[] health = new int[8];
         private readonly int[] ultimateCharge = new int[8];
+        private bool borrowedPending, borrowedActive;
+        public bool UsesMiaSkills(int member) => member == 1 || member == 0 && borrowedActive;
         private int nextEnemy;
         private int nextPlayerSlot;
         public bool OrderedEnemyMovement { get; private set; }
+        public bool IsTraining { get; private set; }
         private BattlePhase resumePhase;
         private ulong activeCells;
         private ulong blockedCells;
@@ -65,10 +68,11 @@ namespace AlbedoGambit.Prototype
         }
 
         // Validate the whole placement before changing any state. No half-placed party on failure.
-        public bool TryBeginPlacement(ulong active, ulong blocked, int[] starts, bool orderedEnemyMovement = false, int[] partyHealth = null)
+        public bool TryBeginPlacement(ulong active, ulong blocked, int[] starts, bool orderedEnemyMovement = false, int[] partyHealth = null, bool training = false)
         {
             if (Phase != BattlePhase.Exploration && Phase != BattlePhase.Cutscene) return false;
             if (starts == null || (starts.Length != 4 && starts.Length != 8)) return false;
+            if (training && (!orderedEnemyMovement || starts.Length != 8)) return false;
             if (partyHealth != null && partyHealth.Length != 4) return false;
             ulong used = 0;
             for (int i = 0; i < starts.Length; i++)
@@ -79,8 +83,10 @@ namespace AlbedoGambit.Prototype
                 if ((active & bit) == 0 || (blocked & bit) != 0 || (used & bit) != 0) return false;
                 used |= bit;
             }
+            borrowedPending = borrowedActive = false;
             ClearOccupancy();
             OrderedEnemyMovement = orderedEnemyMovement && starts.Length == 8;
+            IsTraining = training;
             nextPlayerSlot = 0;
             ParticipantCount = starts.Length;
             activeCells = active;
@@ -90,7 +96,7 @@ namespace AlbedoGambit.Prototype
                 memberCells[i] = starts[i];
                 occupants[starts[i]] = i;
                 health[i] = i < 4 && partyHealth != null ? Math.Max(0, Math.Min(MaxHealth, partyHealth[i])) : MaxHealth;
-                ultimateCharge[i] = 0;
+                ultimateCharge[i] = training && i < 4 ? 3 : 0;
             }
             SelectedMember = 0;
             ActingMember = -1; Side = BattleSide.Player; Result = BattleResult.Ongoing;
@@ -107,6 +113,7 @@ namespace AlbedoGambit.Prototype
             {
                 PlayerTurn = 0;
                 BeginEnemyTurn();
+                if (IsTraining) CompleteEnemyTurn();
             }
             return true;
         }
@@ -159,8 +166,9 @@ namespace AlbedoGambit.Prototype
             ActingMember = -1; ParticipantCount = PlayerTurn = 0;
             Side = BattleSide.Player; Result = BattleResult.Ongoing;
             MovementSpent = ActionSpent = false;
-            OrderedEnemyMovement = false; nextPlayerSlot = 0;
+            IsTraining = false; OrderedEnemyMovement = false; nextPlayerSlot = 0;
             activeCells = blockedCells = 0;
+            borrowedPending = borrowedActive = false;
             ClearOccupancy();
         }
 
@@ -194,6 +202,66 @@ namespace AlbedoGambit.Prototype
                     mask |= 1UL << CellOf(target);
             return mask;
         }
+        public bool CanFuse(int member)
+        {
+            return OrderedEnemyMovement && (member == 0 || member == 1) && CanAct(member)
+                && !MovementSpent && !ActionSpent && ultimateCharge[member] == 3
+                && !IsKnockedOut(1 - member) && Reachable(member, CellOf(1 - member), false);
+        }
+
+        private static int Distance(int a, int b) =>
+            Math.Max(Math.Abs(a % 8 - b % 8), Math.Abs(a / 8 - b / 8));
+
+        public ulong AbilityTargets(int member, int slot)
+        {
+            if (!CanAct(member) || ActionSpent || slot < 0 || slot > 2) return 0;
+            bool fusion = slot == 2;
+            if (fusion && !CanFuse(member)) return 0;
+            if (!fusion && !UsesMiaSkills(member)) return AttackTargets(member);
+            int source = CellOf(fusion ? 1 - member : member);
+            ulong result = 0;
+            for (int enemy = 4; enemy < ParticipantCount; enemy++)
+            {
+                int cell = CellOf(enemy);
+                if (IsKnockedOut(enemy)) continue;
+                if (slot == 1 ? Distance(source, cell) == 1 : FireLine(source, cell))
+                    result |= 1UL << cell;
+            }
+            return result;
+        }
+
+        private bool FireLine(int source, int cell)
+        {
+            int dx = cell % 8 - source % 8, dy = cell / 8 - source / 8;
+            if (dx != 0 && dy != 0 || source == cell) return false;
+            int step = Math.Sign(dx) + 8 * Math.Sign(dy);
+            for (int i = source + step; i != cell; i += step)
+                if (IsBlocked(i)) return false;
+            return true;
+        }
+
+        public bool TryAbility(int member, int slot, int target)
+        {
+            if (!Contains(AbilityTargets(member, slot), target)) return false;
+            if (slot != 2 && !UsesMiaSkills(member)) return TryAttack(member, target);
+            bool fusion = slot == 2;
+            int center = slot == 1 ? CellOf(member) : target;
+            for (int i = 0; i < ParticipantCount; i++)
+            {
+                // During fusion both participants stand on the receiving partner's cell.
+                int cell = fusion && i == member ? CellOf(1 - member) : CellOf(i);
+                if (slot == 0 ? cell != target : Distance(center, cell) > 1) continue;
+                if (slot == 1 && i == member) continue;
+                health[i] = Math.Max(0, health[i] - (i < 4 ? AttackDamage / 2 : AttackDamage));
+            }
+            ActingMember = member;
+            ActionSpent = true;
+            ultimateCharge[member] = fusion ? 0 : Math.Min(3, ultimateCharge[member] + 1);
+            if (fusion) { MovementSpent = true; borrowedPending = true; }
+            UpdateResult();
+            return true;
+        }
+
         // Baseline geometry, deliberately not the research cache or lazy composite generator.
         // Straight movement and attack rays stop at every participant, including KO bodies.
         // The knight jumps over intermediate cells but cannot land on an occupied cell.
@@ -242,6 +310,7 @@ namespace AlbedoGambit.Prototype
         }
         private void UpdateResult()
         {
+            if (health[0] == 0) borrowedPending = borrowedActive = false;
             bool playerAlive = false, enemyAlive = false;
             for (int i = 0; i < ParticipantCount; i++)
                 if (health[i] > 0) { if (i < 4) playerAlive = true; else enemyAlive = true; }
@@ -253,7 +322,9 @@ namespace AlbedoGambit.Prototype
             if (Phase != BattlePhase.Battle || Side != BattleSide.Player || Result != BattleResult.Ongoing) return false;
             MovementSpent = ActionSpent = false; ActingMember = -1;
             if (ParticipantCount == 4) { PlayerTurn++; return true; }
+            borrowedActive = false;
             BeginEnemyTurn();
+            if (IsTraining) CompleteEnemyTurn();
             return true;
         }
         private void BeginEnemyTurn()
@@ -282,6 +353,7 @@ namespace AlbedoGambit.Prototype
                     int candidate = (nextPlayerSlot + i) % 4;
                     if (IsKnockedOut(candidate)) continue;
                     SelectedMember = candidate;
+                    if (candidate == 0) { borrowedActive = borrowedPending; borrowedPending = false; }
                     nextPlayerSlot = (candidate + 1) % 4;
                     break;
                 }

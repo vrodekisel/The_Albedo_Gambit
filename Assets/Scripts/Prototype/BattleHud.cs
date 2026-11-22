@@ -28,6 +28,7 @@ namespace AlbedoGambit.Prototype
         public Text[] abilityLabels;
         public HeroArt[] heroes;
         private BattlePrototypeController combat;
+        private readonly Image[] manaSegments = new Image[3];
         private bool wired;
         private Text endTurnLabel;
         private string normalEndTurnLabel;
@@ -60,6 +61,8 @@ namespace AlbedoGambit.Prototype
                 menuButton.onClick.AddListener(ToggleMenu);
                 resumeButton.onClick.AddListener(ToggleMenu);
                 endTurnButton.onClick.AddListener(EndTurn);
+                for (int i = 0; i < manaSegments.Length; i++)
+                    manaSegments[i] = manaLabel.transform.parent.Find("Mana Unavailable " + i)?.GetComponent<Image>();
                 wired = true;
             }
             Refresh();
@@ -74,15 +77,19 @@ namespace AlbedoGambit.Prototype
         private void PreviewAbility(int slot)
         {
             if (party == null || party.Battle.Phase != BattlePhase.Battle) return;
-            if (slot < 2 && party.Battle.OrderedEnemyMovement)
+            if (party.Battle.OrderedEnemyMovement)
             {
-                if (party.BeginAbility(slot)) Notice(party.IsAimingAbility ? "Choose a highlighted enemy" : "Выбор способности отменён");
+                if (party.BeginAbility(slot)) Notice(party.IsAimingAbility ? "" : "Aim cancelled");
+                else if (slot == 1 && party.Battle.UsesMiaSkills(party.SelectedIndex))
+                    Notice("Flame Strike needs an adjacent enemy");
                 return;
             }
             Notice(heroes[party.SelectedIndex].abilities[slot] + " — not implemented yet");
         }
         public void ShowAbilityHit(int enemy, int health, int charge)
         { Notice("Enemy " + (enemy - 3) + ": " + health + " / 100 HP  ·  Ultimate " + charge + " / 3"); }
+        public void ShowFlameStrike(int enemy, int health)
+        { Notice($"Flame Strike hit the surrounding cells. Enemy {enemy - 3}: {health} HP"); }
         public void ShowAbilityFlight() { Notice("Ability in flight"); }
         public void ShowEnemyHit(int hero, int health) { Notice(heroes[hero].name + ": " + health + " / 100 HP"); }
         private void EndTurn()
@@ -124,11 +131,15 @@ namespace AlbedoGambit.Prototype
             float healthRatio = state.HealthOf(selected) / (float)state.MaxHealth;
             healthFill.rectTransform.SetSizeWithCurrentAnchors(RectTransform.Axis.Horizontal, 382 * healthRatio);
             healthFill.enabled = healthRatio > 0;
+            for (int i = 0; i < manaSegments.Length; i++)
+                if (manaSegments[i] != null) manaSegments[i].color = i < state.UltimateChargeOf(selected)
+                    ? new Color(.35f, .43f, .89f) : new Color(.81f, .80f, .85f);
             manaLabel.text = state.OrderedEnemyMovement
                 ? "Ultimate Mana   " + state.UltimateChargeOf(selected) + " / 3"
                 : "Ultimate Mana   — / 3";
             hint.text = state.OrderedEnemyMovement
                 ? party.IsBattleMoving ? "Action in progress"
+                : party.ChoosingFusionPartner ? "Click the highlighted partner"
                 : party.IsAimingAbility ? "Click a highlighted enemy" : "Choose an ability or a move"
                 : "Abilities not implemented yet";
             turnLabel.text = state.Side == BattleSide.Enemy
@@ -142,13 +153,13 @@ namespace AlbedoGambit.Prototype
                 : !string.IsNullOrEmpty(notice) && Time.unscaledTime < noticeUntil ? notice : "Turn " + state.PlayerTurn + "  ·  click a highlighted cell";
             endTurnButton.interactable = !party.IsBattleMoving && state.Phase == BattlePhase.Battle && state.Side == BattleSide.Player && state.Result == BattleResult.Ongoing;
             if (endTurnLabel != null)
-                endTurnLabel.text = state.Result == BattleResult.Victory ? "В исследование"
-                    : state.Result == BattleResult.PartyKnockedOut ? "Повторить бой" : normalEndTurnLabel;
+                endTurnLabel.text = state.Result == BattleResult.Victory ? "Continue"
+                    : state.Result == BattleResult.PartyKnockedOut ? "Retry" : normalEndTurnLabel;
             if (state.Result != BattleResult.Ongoing)
             {
                 endTurnButton.interactable = !party.IsBattleMoving && state.Phase == BattlePhase.Battle;
-                turnLabel.text = state.Result == BattleResult.Victory ? "Победа" : "Поражение";
-                hint.text = state.Result == BattleResult.Victory ? "Все враги в нокауте" : "Ваша команда в нокауте";
+                turnLabel.text = state.Result == BattleResult.Victory ? "Victory" : "Defeat";
+                hint.text = state.Result == BattleResult.Victory ? "All enemies knocked out" : "Party knocked out";
             }
             float x = 24;
             foreach (int actor in state.OrderedEnemyMovement ? OrderedDisplayOrder : DisplayOrder)
@@ -161,11 +172,13 @@ namespace AlbedoGambit.Prototype
             }
             for (int i = 0; i < 3; i++)
             {
-                abilityIcons[i].sprite = art.icons[i];
-                abilityLabels[i].text = state.OrderedEnemyMovement && i < 2 ? "Orb " + (i + 1) : art.abilities[i];
+                abilityIcons[i].sprite = i < 2 && state.UsesMiaSkills(selected) ? heroes[1].icons[i] : art.icons[i];
+                abilityLabels[i].text = state.OrderedEnemyMovement && i == 2 && selected < 2 ? "Fusion"
+                    : state.OrderedEnemyMovement && i < 2 && state.UsesMiaSkills(selected) ? heroes[1].abilities[i]
+                    : state.OrderedEnemyMovement && i < 2 ? "Orb " + (i + 1) : art.abilities[i];
                 abilityBackgrounds[i].color = art.color;
                 abilityButtons[i].interactable = state.Result == BattleResult.Ongoing && !party.IsBattleMoving && !paused && state.Phase == BattlePhase.Battle &&
-                    state.Side == BattleSide.Player && (!state.OrderedEnemyMovement && i == 2 || i < 2 && !state.ActionSpent);
+                    state.Side == BattleSide.Player && (!state.OrderedEnemyMovement && i == 2 || i == 2 && state.AbilityTargets(selected, 2) != 0 || i < 2 && !state.ActionSpent);
             }
         }
         public bool PointerOverUI(Vector2 position)

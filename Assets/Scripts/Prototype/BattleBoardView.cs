@@ -13,6 +13,29 @@ namespace AlbedoGambit.Prototype
         private Material outlineMaterial;
         private readonly LineRenderer[] moveOutlines = new LineRenderer[64];
         public ulong HighlightedMoves { get; private set; }
+        private readonly LineRenderer[] strikeCells = new LineRenderer[9];
+        private float strikeUntil;
+        public void FlashStrike(int center, bool includeCenter = false)
+        {
+            DrawStrikeArea(center, includeCenter);
+            strikeUntil = Time.time + .9f;
+        }
+
+        private void DrawStrikeArea(int center, bool includeCenter)
+        {
+            int index = 0;
+            for (int y = -1; y <= 1; y++)
+                for (int x = -1; x <= 1; x++)
+                {
+                    if (!includeCenter && x == 0 && y == 0) continue;
+                    int col = center % 8 + x, row = center / 8 + y;
+                    if (strikeCells[index] == null)
+                        strikeCells[index] = CreateOutline("Flame Strike", new Color(1f, .35f, .05f));
+                    DrawCell(strikeCells[index++], col >= 0 && col < 8 && row >= 0 && row < 8 ? row * 8 + col : -1);
+                }
+            if (index < strikeCells.Length && strikeCells[index] != null) strikeCells[index].enabled = false;
+        }
+
         private int hovered = -1;
         public int HoveredCell => hovered;
 
@@ -49,6 +72,7 @@ namespace AlbedoGambit.Prototype
 
         private void LateUpdate()
         {
+            if (Time.time >= strikeUntil) foreach (var line in strikeCells) if (line != null) line.enabled = false;
             RefreshHighlights();
             if (party == null || board == null || party.Battle.Phase != BattlePhase.Battle)
             { Clear(); return; }
@@ -65,6 +89,8 @@ namespace AlbedoGambit.Prototype
                     if (hovered >= 0 && mouse.leftButton.wasPressedThisFrame) { ClickCell(hovered); RefreshHighlights(); }
                 }
             }
+            if (party.ChoosingFusionEnemy && hovered >= 0 && (HighlightedMoves & (1UL << hovered)) != 0)
+                DrawStrikeArea(hovered, true);
             DrawCell(hoverOutline, hovered);
         }
 
@@ -133,12 +159,12 @@ namespace AlbedoGambit.Prototype
             if (party != null && party.Hud != null && party.Hud.IsShowingBattle) return;
             if (party == null || board == null || party.Battle.Phase != BattlePhase.Battle) return;
             int cell = party.Battle.CellOf(party.Battle.SelectedMember);
-            string text = $"Выбран {(char)('A' + party.Battle.SelectedMember)}: {CellName(cell)}";
+            string text = $"Selected {(char)('A' + party.Battle.SelectedMember)}: {CellName(cell)}";
             if (hovered >= 0)
             {
                 int occupant = party.Battle.OccupantAt(hovered);
-                text += $"   |   {CellName(hovered)}: " + (party.Battle.IsBlocked(hovered) ? "препятствие" :
-                    occupant < 0 ? "свободно" : $"персонаж {(char)('A' + occupant)}");
+                text += $"   |   {CellName(hovered)}: " + (party.Battle.IsBlocked(hovered) ? "blocked" :
+                    occupant < 0 ? "empty" : $"unit {(char)('A' + occupant)}");
             }
             GUI.Box(new Rect(12, 114, 670, 32), text);
         }
@@ -150,6 +176,7 @@ namespace AlbedoGambit.Prototype
             hovered = -1;
             if (selectedOutline != null) selectedOutline.enabled = false;
             if (hoverOutline != null) hoverOutline.enabled = false;
+            foreach (var line in strikeCells) if (line != null) line.enabled = false;
             HighlightedMoves = 0;
             foreach (var line in moveOutlines) if (line != null) line.enabled = false;
         }
